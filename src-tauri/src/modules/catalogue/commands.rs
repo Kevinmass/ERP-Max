@@ -31,10 +31,10 @@ pub async fn get_productos(
     searchQuery: Option<String>,
     #[allow(non_snake_case)]
     categoriaId: Option<i32>,
+    #[allow(non_snake_case)]
+    includeFotos: Option<bool>,
 ) -> Result<ProductoResponse, String> {
-    println!("COMMAND get_productos: page={:?}, pageSize={:?}, searchQuery={:?}, categoriaId={:?}", 
-             page, pageSize, searchQuery, categoriaId);
-    service::get_products_service(&pool, page, pageSize, searchQuery, categoriaId).await
+    service::get_products_service(&pool, page, pageSize, searchQuery, categoriaId, includeFotos).await
 }
 
 #[tauri::command]
@@ -108,6 +108,17 @@ pub async fn migrate_product_stock_to_inventory(
     pool: State<'_, SqlitePool>,
 ) -> Result<(), String> {
     service::migrate_product_stock_to_inventory_service(&pool).await
+}
+
+/// Apply a bulk percentage price adjustment to the selected products.
+#[tauri::command]
+pub async fn aplicar_ajuste_precios(
+    pool: State<'_, SqlitePool>,
+    #[allow(non_snake_case)]
+    productIds: Vec<i32>,
+    porcentaje: f64,
+) -> Result<i32, String> {
+    service::aplicar_ajuste_precios_service(&pool, productIds, porcentaje).await
 }
 
 /// Export catalogue to Excel format (CSV with .xlsx extension for compatibility)

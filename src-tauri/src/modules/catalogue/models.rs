@@ -6,7 +6,8 @@ pub struct Producto {
     pub id: i32,
     pub nombre: String,
     pub descripcion: Option<String>,
-    pub costo: f64,
+    pub costo: f64,               // Selling price (what the POS charges)
+    pub precio_compra: Option<f64>, // True purchase cost (optional; distinct from costo)
     pub fotos: Vec<String>,
     pub stock: i32,
     pub categoria_id: Option<i32>,
@@ -28,6 +29,8 @@ pub struct CrearProducto {
     pub nombre: String,
     pub descripcion: Option<String>,
     pub costo: f64,
+    #[serde(default)]
+    pub precio_compra: Option<f64>,
     pub fotos: Vec<String>,
     pub stock: Option<i32>,
     pub categoria_id: Option<i32>,
@@ -40,6 +43,8 @@ pub struct ActualizarProducto {
     pub nombre: String,
     pub descripcion: Option<String>,
     pub costo: f64,
+    #[serde(default)]
+    pub precio_compra: Option<f64>,
     pub fotos: Vec<String>,
     pub stock: i32,
     pub categoria_id: Option<i32>,

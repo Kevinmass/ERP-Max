@@ -2,7 +2,7 @@
 
 use crate::modules::product_matching::models::*;
 use crate::modules::product_matching::parser;
-use crate::modules::product_matching::embeddings::EmbeddingService;
+use crate::modules::product_matching::embeddings::{NameMatcher, code_matches};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -36,26 +36,24 @@ impl Default for MatchingConfig {
 
 /// Product Matching Service
 pub struct ProductMatchingService {
-    embedding_service: EmbeddingService,
+    matcher: NameMatcher,
     config: MatchingConfig,
 }
 
 impl ProductMatchingService {
     /// Create a new service instance
     pub fn new() -> Self {
-        let embedding_service = EmbeddingService::new();
-        
         Self {
-            embedding_service,
+            matcher: NameMatcher::new(),
             config: MatchingConfig::default(),
         }
     }
-    
+
     /// Initialize the service (call once at startup)
     pub async fn initialize(&mut self) -> Result<(), MatchingError> {
-        self.embedding_service.initialize()
+        self.matcher.initialize()
             .await
-            .map_err(|e| MatchingError::EmbeddingError(e.to_string()))
+            .map_err(MatchingError::EmbeddingError)
     }
     
     /// Set custom thresholds
@@ -70,82 +68,53 @@ impl ProductMatchingService {
             .map_err(|e| MatchingError::ParseError(e.to_string()))
     }
     
-    /// Execute the matching algorithm for a list of supplier products
+    /// Execute the matching algorithm for a list of supplier products.
+    ///
+    /// For each supplier product, scores every internal product by name and keeps
+    /// the single best candidate together with its similarity score. A light boost
+    /// is applied when the supplier code clearly appears on our side. The result is
+    /// only a suggestion — the user makes the final confirm/reject decision.
     pub async fn execute_matching(
         &self,
         supplier_products: Vec<ProductoProveedor>,
         internal_products: &[ProductoInterno],
     ) -> Result<Vec<MatchingResultado>, MatchingError> {
-        let mut resultados = Vec::new();
-        
-        // Pre-compute internal product embeddings for efficiency
-        let internal_names: Vec<String> = internal_products
-            .iter()
-            .map(|p| p.nombre.clone())
-            .collect();
-        
-        // Generate embeddings for internal products once
-        let internal_embeddings = self.embedding_service
-            .generate_embeddings(&internal_names)
-            .await
-            .map_err(|e| MatchingError::EmbeddingError(e.to_string()))?;
-        
-        for (_idx, supplier_product) in supplier_products.iter().enumerate() {
-            // Generate embedding for supplier product
-            let supplier_embedding = match self.embedding_service
-                .generate_embedding(&supplier_product.nombre)
-                .await
-            {
-                Ok(e) => e,
-                Err(_) => {
-                    // If embedding fails, mark as sin match
-                    resultados.push(MatchingResultado {
+        let mut resultados = Vec::with_capacity(supplier_products.len());
+
+        for supplier_product in supplier_products.iter() {
+            // Find the best-scoring internal product by name.
+            let mut best: Option<(usize, f64)> = None;
+            for (idx, internal) in internal_products.iter().enumerate() {
+                let mut score = self.matcher.similarity(&supplier_product.nombre, &internal.nombre);
+
+                // Light boost when the supplier code clearly matches on our side.
+                if let Some(code) = supplier_product.codigo.as_deref() {
+                    if code_matches(code, internal) {
+                        score = score.max(0.95);
+                    }
+                }
+
+                if best.map_or(true, |(_, best_score)| score > best_score) {
+                    best = Some((idx, score));
+                }
+            }
+
+            let resultado = match best {
+                Some((idx, score)) => {
+                    let internal = &internal_products[idx];
+                    MatchingResultado {
                         id: None,
                         importacion_id: 0, // Will be set by caller
                         producto_proveedor_nombre: supplier_product.nombre.clone(),
                         producto_proveedor_precio: supplier_product.precio,
                         producto_proveedor_cantidad: supplier_product.cantidad,
-                        producto_interno_id: None,
-                        producto_interno_nombre: None,
-                        score_similitud: 0.0,
-                        estado: MatchingEstado::SinMatch,
-                    });
-                    continue;
+                        producto_interno_id: Some(internal.id),
+                        producto_interno_nombre: Some(internal.nombre.clone()),
+                        score_similitud: score,
+                        estado: self.determine_estado(score),
+                    }
                 }
-            };
-            
-            // Calculate similarity with all internal products
-            let mut similarities: Vec<(usize, f64)> = Vec::new();
-            
-            for (internal_idx, internal_embedding) in internal_embeddings.iter().enumerate() {
-                let similarity = self.embedding_service.cosine_similarity(
-                    &supplier_embedding,
-                    internal_embedding
-                );
-                similarities.push((internal_idx, similarity));
-            }
-            
-            // Sort by similarity descending
-            similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            
-            // Get best match
-            if let Some((best_idx, best_score)) = similarities.first() {
-                let best_product = &internal_products[*best_idx];
-                let estado = self.determine_estado(*best_score);
-                
-                resultados.push(MatchingResultado {
-                    id: None,
-                    importacion_id: 0,
-                    producto_proveedor_nombre: supplier_product.nombre.clone(),
-                    producto_proveedor_precio: supplier_product.precio,
-                    producto_proveedor_cantidad: supplier_product.cantidad,
-                    producto_interno_id: Some(best_product.id),
-                    producto_interno_nombre: Some(best_product.nombre.clone()),
-                    score_similitud: *best_score,
-                    estado,
-                });
-            } else {
-                resultados.push(MatchingResultado {
+                None => MatchingResultado {
                     id: None,
                     importacion_id: 0,
                     producto_proveedor_nombre: supplier_product.nombre.clone(),
@@ -155,10 +124,12 @@ impl ProductMatchingService {
                     producto_interno_nombre: None,
                     score_similitud: 0.0,
                     estado: MatchingEstado::SinMatch,
-                });
-            }
+                },
+            };
+
+            resultados.push(resultado);
         }
-        
+
         Ok(resultados)
     }
     

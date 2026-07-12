@@ -5,9 +5,9 @@
   "identifier": "com.sistema.catalogo.erp",
   "build": {
     "frontendDist": "../frontend/dist",
-    "devUrl": "http://localhost:5174",
+    "devUrl": "http://127.0.0.1:5174",
     "beforeDevCommand": "cd ../frontend && npm run dev",
-    "beforeBuildCommand": ""
+    "beforeBuildCommand": "cd ../frontend && npm run build"
   },
   "app": {
     "windows": [

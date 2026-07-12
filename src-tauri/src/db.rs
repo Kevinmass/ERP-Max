@@ -336,6 +336,53 @@ pub async fn init_db() -> Result<SqlitePool, Box<dyn std::error::Error>> {
         }
     }
 
+    // ── Post-migration column guards (idempotent) ───────────────────────────
+    // Additive columns introduced after the original 4 migrations are ensured
+    // here so they exist on every database regardless of which migration branch
+    // above executed (fresh install, legacy DB, or partially-migrated DB). Each
+    // is guarded by a pragma check, so re-running is always a no-op.
+
+    // venta_items.precio_unitario — the actual unit price charged at sale time.
+    // Without it, historical sales are recomputed from a product's *current*
+    // price, so past receipts silently change when a price is updated.
+    let venta_precio_exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('venta_items') WHERE name='precio_unitario'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap_or(0);
+    if venta_precio_exists == 0 {
+        println!("Adding missing column venta_items.precio_unitario...");
+        sqlx::query("ALTER TABLE venta_items ADD COLUMN precio_unitario REAL")
+            .execute(&pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to add venta_items.precio_unitario column: {}", e);
+                e
+            })?;
+        println!("Added venta_items.precio_unitario column.");
+    }
+
+    // productos.precio_compra — the true purchase cost, distinct from `costo`
+    // (which holds the selling price). Nullable: unknown until entered or imported.
+    let precio_compra_exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('productos') WHERE name='precio_compra'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap_or(0);
+    if precio_compra_exists == 0 {
+        println!("Adding missing column productos.precio_compra...");
+        sqlx::query("ALTER TABLE productos ADD COLUMN precio_compra REAL")
+            .execute(&pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to add productos.precio_compra column: {}", e);
+                e
+            })?;
+        println!("Added productos.precio_compra column.");
+    }
+
     // Print tables for diagnostics (helps verify migrations applied)
     let rows = sqlx::query("SELECT name FROM sqlite_master WHERE type='table'")
         .fetch_all(&pool)

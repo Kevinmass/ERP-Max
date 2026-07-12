@@ -10,11 +10,11 @@ pub async fn get_products_service(
     page_size: Option<i32>,
     search_query: Option<String>,
     categoria_id: Option<i32>,
+    include_fotos: Option<bool>,
 ) -> Result<ProductoResponse, String> {
     // For now, just delegate to db layer
     // In the future, add caching, additional validation, business rules, etc.
-    println!("SERVICE: get_products_service called - page: {:?}, page_size: {:?}, search_query: {:?}, categoria_id: {:?}", page, page_size, search_query, categoria_id);
-    db::get_all_products_filtered(pool, page, page_size, search_query, categoria_id).await
+    db::get_all_products_filtered(pool, page, page_size, search_query, categoria_id, include_fotos).await
 }
 
 pub async fn create_product_service(
@@ -117,6 +117,21 @@ pub async fn get_products_by_category_hierarchy_service(
     page_size: Option<i32>,
 ) -> Result<ProductoResponse, String> {
     db::get_products_by_category_hierarchy(pool, categoria_id, page, page_size).await
+}
+
+pub async fn aplicar_ajuste_precios_service(
+    pool: &SqlitePool,
+    product_ids: Vec<i32>,
+    porcentaje: f64,
+) -> Result<i32, String> {
+    if product_ids.is_empty() {
+        return Err("No se seleccionaron productos".to_string());
+    }
+    if porcentaje <= -100.0 {
+        return Err("El ajuste no puede ser -100% o menor".to_string());
+    }
+
+    db::aplicar_ajuste_precios(pool, &product_ids, porcentaje).await
 }
 
 pub async fn migrate_product_stock_to_inventory_service(

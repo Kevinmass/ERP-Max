@@ -2,7 +2,8 @@ export interface Producto {
     id: number;
     nombre: string;
     descripcion?: string;
-    costo: number;
+    costo: number;            // Selling price (what the POS charges)
+    precio_compra?: number;   // True purchase cost (optional)
     fotos: string[];
     stock: number;
     categoria_id?: number;
@@ -32,6 +33,7 @@ export interface CrearProducto {
     nombre: string;
     descripcion?: string;
     costo: number;
+    precio_compra?: number;
     fotos: string[];
     stock?: number;
     categoria_id?: number;
@@ -43,6 +45,7 @@ export interface ActualizarProducto {
     nombre: string;
     descripcion?: string;
     costo: number;
+    precio_compra?: number;
     fotos: string[];
     stock: number;
     categoria_id?: number;

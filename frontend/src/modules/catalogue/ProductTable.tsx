@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { Producto, Categoria } from './types';
+import PriceAdjustModal from './PriceAdjustModal';
 
 interface ProductTableProps {
     productos: Producto[];
@@ -8,6 +9,7 @@ interface ProductTableProps {
     onEdit: (producto: Producto) => void;
     onDelete: (productoId: number) => void;
     onRefresh: () => void;
+    onBulkAdjust: (productIds: number[], porcentaje: number) => Promise<void>;
 }
 
 export default function ProductTable({
@@ -16,12 +18,22 @@ export default function ProductTable({
     loading,
     onEdit,
     onDelete,
-    onRefresh
+    onRefresh,
+    onBulkAdjust
 }: ProductTableProps) {
     const [search, setSearch] = useState('');
     const [inputValue, setInputValue] = useState('');
     const [sortBy, setSortBy] = useState<'none' | 'stock' | 'price'>('none');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [adjustOpen, setAdjustOpen] = useState(false);
+    const [applying, setApplying] = useState(false);
+
+    // Reset selection whenever the loaded product set changes (filter/search/view),
+    // so the selection always matches what's currently shown.
+    useEffect(() => {
+        setSelectedIds(new Set());
+    }, [productos]);
 
     const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,6 +114,50 @@ export default function ProductTable({
         return filtered;
     }, [productos, search, sortBy, sortOrder]);
 
+    // Selection helpers (selection persists across filtering/sorting)
+    const selectedProducts = useMemo(
+        () => productos.filter(p => selectedIds.has(p.id)),
+        [productos, selectedIds]
+    );
+
+    const allVisibleSelected = filteredAndSortedProductos.length > 0
+        && filteredAndSortedProductos.every(p => selectedIds.has(p.id));
+
+    const toggleOne = (id: number) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleAllVisible = () => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (allVisibleSelected) {
+                filteredAndSortedProductos.forEach(p => next.delete(p.id));
+            } else {
+                filteredAndSortedProductos.forEach(p => next.add(p.id));
+            }
+            return next;
+        });
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const handleApplyAdjust = async (porcentaje: number) => {
+        try {
+            setApplying(true);
+            await onBulkAdjust(Array.from(selectedIds), porcentaje);
+            setAdjustOpen(false);
+            clearSelection();
+        } catch {
+            // parent surfaces the error; keep the modal open so the user can retry
+        } finally {
+            setApplying(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
@@ -161,11 +217,43 @@ export default function ProductTable({
                 </div>
             </div>
 
+            {/* Bulk selection bar */}
+            {selectedIds.size > 0 && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 bg-blue-50 border-b border-blue-100">
+                    <span className="text-sm text-blue-800 font-medium">
+                        {selectedIds.size} producto(s) seleccionados
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setAdjustOpen(true)}
+                            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                            Ajustar precios
+                        </button>
+                        <button
+                            onClick={clearSelection}
+                            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+                        >
+                            Limpiar
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Table */}
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
+                            <th className="px-4 py-3 w-10">
+                                <input
+                                    type="checkbox"
+                                    checked={allVisibleSelected}
+                                    onChange={toggleAllVisible}
+                                    className="rounded border-gray-300"
+                                    aria-label="Seleccionar todos"
+                                />
+                            </th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Producto
                             </th>
@@ -194,7 +282,16 @@ export default function ProductTable({
                             const categoryDisplay = getCategoryDisplay(producto);
 
                             return (
-                                <tr key={producto.id} className="hover:bg-gray-50 transition-colors">
+                                <tr key={producto.id} className={`transition-colors ${selectedIds.has(producto.id) ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                                    <td className="px-4 py-4 w-10">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIds.has(producto.id)}
+                                            onChange={() => toggleOne(producto.id)}
+                                            className="rounded border-gray-300"
+                                            aria-label={`Seleccionar ${producto.nombre}`}
+                                        />
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div>
                                             <div className="text-sm font-medium text-gray-900">
@@ -223,8 +320,22 @@ export default function ProductTable({
                                             {producto.stock}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                                        $ {producto.costo.toFixed(2)}
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-green-600">
+                                            $ {producto.costo.toFixed(2)}
+                                        </div>
+                                        {producto.precio_compra != null && producto.precio_compra > 0 && (() => {
+                                            const markup = ((producto.costo - producto.precio_compra) / producto.precio_compra) * 100;
+                                            const positive = producto.costo >= producto.precio_compra;
+                                            return (
+                                                <div className="text-xs text-gray-400 mt-0.5">
+                                                    Costo $ {producto.precio_compra.toFixed(2)} ·{' '}
+                                                    <span className={positive ? 'text-green-600' : 'text-red-600'}>
+                                                        {markup >= 0 ? '+' : ''}{markup.toFixed(0)}%
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         {producto.tags && producto.tags.split(' ').filter(t => t.trim()).length > 0 ? (
@@ -280,6 +391,14 @@ export default function ProductTable({
                     No hay productos disponibles
                 </div>
             )}
+
+            <PriceAdjustModal
+                isOpen={adjustOpen}
+                onClose={() => setAdjustOpen(false)}
+                selectedProducts={selectedProducts}
+                onApply={handleApplyAdjust}
+                loading={applying}
+            />
         </div>
     );
 }

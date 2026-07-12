@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ProductTable from '../modules/catalogue/ProductTable';
 import ProductosGrid from '../modules/catalogue/ProductosGrid';
@@ -82,113 +82,81 @@ export default function Catalogue() {
     const [exportLoading, setExportLoading] = useState(false);
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-    // Load initial data on component mount
-    useEffect(() => {
-        loadInitialData();
-    }, []);
-
-    const loadInitialData = async () => {
+    const loadCategories = async () => {
         try {
-            setLoading(true);
             const categoriasResponse = await invoke<Categoria[]>('get_categorias');
             setCategorias(categoriasResponse);
-
-            // Load first page of products with no filters initially
-            const productosResponse = await invoke<ProductoResponse>('get_productos', { 
-                page: 1, 
-                pageSize: pageSize,
-                searchQuery: undefined,
-                categoriaId: undefined
-            })
-
-            setProductos(productosResponse.data);
-            setTotalProducts(productosResponse.total);
-            setTotalPages(Math.ceil(productosResponse.total / pageSize));
-            setCurrentPage(1);
         } catch (error) {
-            console.error('Error loading initial data:', error);
-        } finally {
-            setLoading(false);
+            console.error('Error loading categories:', error);
         }
     };
 
-    const handleSearch = async () => {
+    // Table view has no images, so it loads the entire filtered set at once
+    // (so "select all" can cover everything). Grid view stays paginated with
+    // photos, which is lighter for low-end devices.
+    const TABLE_LOAD_ALL = 100000;
+
+    const fetchProducts = async (page: number) => {
         try {
             setLoading(true);
-            
-            console.log('Search query (raw):', searchQuery);
-            console.log('Selected category (raw):', selectedCategory);
-            
-            // Call backend with parameters - IMPORTANT: use exact parameter names matching Rust function
-            const productosResponse = await invoke<ProductoResponse>('get_productos', {
-                page: 1, 
-                pageSize: pageSize,
+            const isTable = viewMode === 'table';
+            const response = await invoke<ProductoResponse>('get_productos', {
+                page: isTable ? 1 : page,
+                pageSize: isTable ? TABLE_LOAD_ALL : pageSize,
                 searchQuery: searchQuery.trim() !== '' ? searchQuery : undefined,
-                categoriaId: selectedCategory !== null ? selectedCategory : undefined
+                categoriaId: selectedCategory !== null ? selectedCategory : undefined,
+                includeFotos: !isTable,
             });
 
-            console.log('Response:', productosResponse);
-            
-            setProductos(productosResponse.data);
-            setTotalProducts(productosResponse.total);
-            setTotalPages(Math.ceil(productosResponse.total / pageSize));
-            setCurrentPage(1);
+            setProductos(response.data);
+            setTotalProducts(response.total);
+            setTotalPages(isTable ? 1 : Math.ceil(response.total / pageSize));
+            setCurrentPage(isTable ? 1 : page);
         } catch (error) {
-            console.error('Error searching products:', error);
-            alert('Error al buscar productos');
+            console.error('Error loading products:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleClearFilters = async () => {
+    // Load categories once on mount.
+    useEffect(() => {
+        loadCategories();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Refetch immediately when the category filter or view mode changes
+    // (this also performs the initial product load on mount).
+    useEffect(() => {
+        fetchProducts(1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCategory, viewMode]);
+
+    // Debounced refetch as the user types in the search box (skips first mount).
+    const didMountRef = useRef(false);
+    useEffect(() => {
+        if (!didMountRef.current) {
+            didMountRef.current = true;
+            return;
+        }
+        const t = setTimeout(() => fetchProducts(1), 300);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchQuery]);
+
+    const handleSearch = () => {
+        fetchProducts(1);
+    };
+
+    const handleClearFilters = () => {
+        // Effects above refetch when these change.
         setSearchQuery('');
         setSelectedCategory(null);
-        try {
-            setLoading(true);
-            const productosResponse = await invoke<ProductoResponse>('get_productos', {
-                page: 1, 
-                pageSize: pageSize,
-                searchQuery: undefined,
-                categoriaId: undefined
-            });
-
-            setProductos(productosResponse.data);
-            setTotalProducts(productosResponse.total);
-            setTotalPages(Math.ceil(productosResponse.total / pageSize));
-            setCurrentPage(1);
-        } catch (error) {
-            console.error('Error clearing filters:', error);
-        } finally {
-            setLoading(false);
-        }
     };
 
     const handlePageChange = (newPage: number) => {
         if (newPage >= 1 && newPage <= totalPages) {
-            loadPageData(newPage);
-        }
-    };
-
-    const loadPageData = async (page: number) => {
-        try {
-            setLoading(true);
-            
-            const productosResponse = await invoke<ProductoResponse>('get_productos', {
-                page: page, 
-                pageSize: pageSize,
-                searchQuery: searchQuery.trim() !== '' ? searchQuery : undefined,
-                categoriaId: selectedCategory !== null ? selectedCategory : undefined
-            });
-
-            setProductos(productosResponse.data);
-            setTotalProducts(productosResponse.total);
-            setTotalPages(Math.ceil(productosResponse.total / pageSize));
-            setCurrentPage(page);
-        } catch (error) {
-            console.error('Error loading page:', error);
-        } finally {
-            setLoading(false);
+            fetchProducts(newPage);
         }
     };
 
@@ -231,6 +199,21 @@ export default function Catalogue() {
     const handleEditProduct = (producto: Producto) => {
         setEditingProduct(producto);
         setShowProductForm(true);
+    };
+
+    const handleBulkAdjust = async (productIds: number[], porcentaje: number) => {
+        try {
+            setSaving(true);
+            const actualizados = await invoke<number>('aplicar_ajuste_precios', { productIds, porcentaje });
+            await handleSearch(); // refresh with current filters
+            setNotification({ message: `${actualizados} producto(s) actualizados`, type: 'success' });
+        } catch (error) {
+            console.error('Error adjusting prices:', error);
+            setNotification({ message: 'Error al ajustar los precios', type: 'error' });
+            throw error;
+        } finally {
+            setSaving(false);
+        }
     };
 
     // Export handlers with notifications
@@ -427,6 +410,7 @@ export default function Catalogue() {
                             onEdit={handleEditProduct}
                             onDelete={handleDeleteProduct}
                             onRefresh={() => handleSearch()}
+                            onBulkAdjust={handleBulkAdjust}
                         />
                     ) : (
                         <ProductosGrid

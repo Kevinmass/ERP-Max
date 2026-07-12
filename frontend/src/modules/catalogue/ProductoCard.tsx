@@ -168,6 +168,19 @@ export default function ProductoCard({ producto, categoriaNombre, onEdit, onDele
                     </span>
                 </div>
 
+                {producto.precio_compra != null && producto.precio_compra > 0 && (() => {
+                    const markup = ((producto.costo - producto.precio_compra) / producto.precio_compra) * 100;
+                    const positive = producto.costo >= producto.precio_compra;
+                    return (
+                        <div className="text-xs text-gray-400 mb-3 -mt-1">
+                            Costo $ {producto.precio_compra.toFixed(2)} ·{' '}
+                            <span className={positive ? 'text-green-600' : 'text-red-600'}>
+                                {markup >= 0 ? '+' : ''}{markup.toFixed(0)}% margen
+                            </span>
+                        </div>
+                    );
+                })()}
+
                 {producto.tags && producto.tags.split(' ').filter(t => t.trim()).length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-3">
                         {producto.tags.split(' ').slice(0, 3).map((tag) => {

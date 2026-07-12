@@ -106,27 +106,34 @@ pub async fn get_all_products_filtered(
     page_size: Option<i32>,
     search_query: Option<String>,
     categoria_id: Option<i32>,
+    include_fotos: Option<bool>,
 ) -> Result<ProductoResponse, String> {
     let page = page.unwrap_or(1);
     let page_size = page_size.unwrap_or(20);
     let offset = (page - 1) * page_size;
 
-    // Log the parameters for debugging
-    println!("DEBUG get_all_products_filtered - page: {:?}, page_size: {:?}, search_query: {:?}, categoria_id: {:?}", page, page_size, search_query, categoria_id);
+    // Photos (base64) are heavy; table view fetches without them so it can load
+    // the whole filtered set cheaply. The subquery is a constant string here — no
+    // user input — so building it into the query is safe.
+    let fotos_select = if include_fotos.unwrap_or(true) {
+        "(SELECT GROUP_CONCAT(pf.contenido_base64, '|||') FROM (
+               SELECT contenido_base64 FROM producto_fotos
+               WHERE producto_id = p.id ORDER BY orden LIMIT 3
+           ) pf) as fotos"
+    } else {
+        "NULL as fotos"
+    };
 
     // Build dynamic query for filtering
-    let mut query_builder = sqlx::QueryBuilder::new(
-        r#"
-        SELECT p.id, p.nombre, p.descripcion, p.costo, 
+    let mut query_builder = sqlx::QueryBuilder::new(format!(
+        "SELECT p.id, p.nombre, p.descripcion, p.costo, p.precio_compra,
                COALESCE(i.quantity, 0) as stock, p.categoria_id, p.tags,
-               (SELECT GROUP_CONCAT(pf.contenido_base64, '|||') FROM (
-                   SELECT contenido_base64 FROM producto_fotos
-                   WHERE producto_id = p.id ORDER BY orden LIMIT 3
-               ) pf) as fotos
+               {}
         FROM productos p
         LEFT JOIN inventory i ON p.id = i.product_id
-        WHERE 1=1"#
-    );
+        WHERE 1=1",
+        fotos_select
+    ));
 
     // Add search filter
     if let Some(search) = &search_query {
@@ -214,6 +221,7 @@ pub async fn get_all_products_filtered(
             nombre: row.try_get("nombre").map_err(|e| format!("Error getting nombre: {}", e))?,
             descripcion: row.try_get("descripcion").ok(),
             costo: row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?,
+            precio_compra: row.try_get("precio_compra").ok(),
             stock: row.try_get("stock").map_err(|e| format!("Error getting stock: {}", e))?,
             categoria_id: row.try_get("categoria_id").ok(),
             tags: row.try_get("tags").ok(),
@@ -355,6 +363,59 @@ pub async fn update_product_price_by_id(
     Ok(())
 }
 
+/// Apply a bulk percentage adjustment to the selling price of the given products.
+///
+/// For each product: if it has no recorded cost yet, the current price is captured
+/// as its cost (once); then the selling price is raised by `porcentaje` percent and
+/// rounded to the nearest whole peso. Runs in a single transaction — all or nothing.
+pub async fn aplicar_ajuste_precios(
+    pool: &SqlitePool,
+    product_ids: &[i32],
+    porcentaje: f64,
+) -> Result<i32, String> {
+    if product_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let factor = 1.0 + porcentaje / 100.0;
+    let mut tx = pool.begin().await.map_err(|e| format!("Error starting transaction: {}", e))?;
+    let mut actualizados = 0;
+
+    for &id in product_ids {
+        let row = sqlx::query("SELECT costo, precio_compra FROM productos WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|e| format!("Error reading product {}: {}", id, e))?;
+
+        let row = match row {
+            Some(r) => r,
+            None => continue, // skip ids that no longer exist
+        };
+
+        let costo: f64 = row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?;
+        let precio_compra: Option<f64> = row.try_get("precio_compra").ok();
+
+        // Capture the cost basis only the first time; preserve it afterwards.
+        let nuevo_precio_compra = precio_compra.unwrap_or(costo);
+        // Raise selling price, rounded to the nearest whole peso.
+        let nuevo_costo = (costo * factor).round();
+
+        sqlx::query("UPDATE productos SET costo = ?, precio_compra = ? WHERE id = ?")
+            .bind(nuevo_costo)
+            .bind(nuevo_precio_compra)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| format!("Error updating product {}: {}", id, e))?;
+
+        actualizados += 1;
+    }
+
+    tx.commit().await.map_err(|e| format!("Error committing transaction: {}", e))?;
+    Ok(actualizados)
+}
+
 /// Get product by name (for import matching)
 #[allow(dead_code)]
 pub async fn get_product_by_name(
@@ -381,6 +442,7 @@ pub async fn get_product_by_name(
             nombre: row.try_get("nombre").map_err(|e| format!("Error getting nombre: {}", e))?,
             descripcion: row.try_get("descripcion").ok(),
             costo: row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?,
+            precio_compra: row.try_get("precio_compra").ok(),
             stock: row.try_get("stock").map_err(|e| format!("Error getting stock: {}", e))?,
             categoria_id: row.try_get("categoria_id").ok(),
             tags: row.try_get("tags").ok(),
@@ -396,7 +458,7 @@ pub async fn get_all_products(
     page: Option<i32>,
     page_size: Option<i32>,
 ) -> Result<ProductoResponse, String> {
-    get_all_products_filtered(pool, page, page_size, None, None).await
+    get_all_products_filtered(pool, page, page_size, None, None, None).await
 }
 
 pub async fn create_product(
@@ -405,11 +467,12 @@ pub async fn create_product(
 ) -> Result<Producto, String> {
     // Insert product
     let product_id: i32 = sqlx::query_scalar(
-        "INSERT INTO productos (nombre, descripcion, costo, stock, categoria_id, tags) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
+        "INSERT INTO productos (nombre, descripcion, costo, precio_compra, stock, categoria_id, tags) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id"
     )
     .bind(&producto.nombre)
     .bind(&producto.descripcion)
     .bind(producto.costo)
+    .bind(producto.precio_compra)
     .bind(producto.stock.unwrap_or(0))
     .bind(producto.categoria_id)
     .bind(&producto.tags)
@@ -452,6 +515,7 @@ pub async fn create_product(
         nombre: producto.nombre,
         descripcion: producto.descripcion,
         costo: producto.costo,
+        precio_compra: producto.precio_compra,
         stock: initial_stock,
         categoria_id: producto.categoria_id,
         tags: producto.tags,
@@ -463,25 +527,24 @@ pub async fn update_product(
     pool: &SqlitePool,
     producto: ActualizarProducto,
 ) -> Result<Producto, String> {
-    // Get current product to calculate stock difference
-    let current_product: (i32, String, Option<String>, f64, i32, Option<i32>, Option<String>) = 
-        sqlx::query_as("SELECT id, nombre, descripcion, costo, stock, categoria_id, tags FROM productos WHERE id = ?")
+    // Validate the product exists (clear error instead of a silent no-op update).
+    let exists: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM productos WHERE id = ?")
         .bind(producto.id)
         .fetch_one(pool)
         .await
-        .map_err(|e| format!("Error getting current product: {}", e))?;
-
-    let current_stock = current_product.4;
-    let new_stock = producto.stock;
-    let stock_difference = new_stock - current_stock;
+        .map_err(|e| format!("Error checking product: {}", e))?;
+    if exists == 0 {
+        return Err(format!("Product with ID {} not found", producto.id));
+    }
 
     // Update product
     sqlx::query(
-        "UPDATE productos SET nombre = ?, descripcion = ?, costo = ?, stock = ?, categoria_id = ?, tags = ? WHERE id = ?"
+        "UPDATE productos SET nombre = ?, descripcion = ?, costo = ?, precio_compra = ?, stock = ?, categoria_id = ?, tags = ? WHERE id = ?"
     )
     .bind(&producto.nombre)
     .bind(&producto.descripcion)
     .bind(producto.costo)
+    .bind(producto.precio_compra)
     .bind(producto.stock)
     .bind(producto.categoria_id)
     .bind(&producto.tags)
@@ -512,18 +575,15 @@ pub async fn update_product(
         }
     }
 
-    // Sync stock changes with inventory table if stock was modified
-    if stock_difference != 0 {
-        // Use the adjust_stock function from stock module
-        use crate::modules::stock::models::AdjustStockRequest;
-        use crate::modules::stock::db::adjust_stock;
-        
-        let request = AdjustStockRequest {
-            product_id: producto.id,
-            delta: stock_difference,
-        };
-        adjust_stock(pool, request).await?;
-    }
+    // Inventory is the single source of truth for stock. A product edit sets the
+    // inventory quantity absolutely to the edited value — never a delta against
+    // productos.stock (that column is no longer read and would drift after sales).
+    use crate::modules::stock::models::UpdateStockRequest;
+    use crate::modules::stock::db::update_stock_manually;
+    update_stock_manually(pool, UpdateStockRequest {
+        product_id: producto.id,
+        quantity: producto.stock,
+    }).await?;
 
     // Return the updated product
     Ok(Producto {
@@ -531,6 +591,7 @@ pub async fn update_product(
         nombre: producto.nombre,
         descripcion: producto.descripcion,
         costo: producto.costo,
+        precio_compra: producto.precio_compra,
         stock: producto.stock,
         categoria_id: producto.categoria_id,
         tags: producto.tags,
@@ -600,7 +661,7 @@ pub async fn get_product_by_id(
 ) -> Result<Producto, String> {
     let row = sqlx::query(
         r#"
-        SELECT p.id, p.nombre, p.descripcion, p.costo, 
+        SELECT p.id, p.nombre, p.descripcion, p.costo, p.precio_compra,
                COALESCE(i.quantity, 0) as stock, p.categoria_id, p.tags,
                (SELECT GROUP_CONCAT(pf.contenido_base64, '|||') FROM (
                    SELECT contenido_base64 FROM producto_fotos
@@ -626,6 +687,7 @@ pub async fn get_product_by_id(
         nombre: row.try_get("nombre").map_err(|e| format!("Error getting nombre: {}", e))?,
         descripcion: row.try_get("descripcion").ok(),
         costo: row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?,
+        precio_compra: row.try_get("precio_compra").ok(),
         stock: row.try_get("stock").map_err(|e| format!("Error getting stock: {}", e))?,
         categoria_id: row.try_get("categoria_id").ok(),
         tags: row.try_get("tags").ok(),
@@ -756,6 +818,7 @@ pub async fn get_products_by_category_hierarchy(
             nombre: row.try_get("nombre").map_err(|e| format!("Error getting nombre: {}", e))?,
             descripcion: row.try_get("descripcion").ok(),
             costo: row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?,
+            precio_compra: row.try_get("precio_compra").ok(),
             stock: row.try_get("stock").map_err(|e| format!("Error getting stock: {}", e))?,
             categoria_id: row.try_get("categoria_id").ok(),
             tags: row.try_get("tags").ok(),

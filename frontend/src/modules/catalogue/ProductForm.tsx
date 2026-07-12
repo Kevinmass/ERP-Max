@@ -22,6 +22,7 @@ export default function ProductForm({
         nombre: '',
         descripcion: '',
         costo: 0,
+        precio_compra: undefined as number | undefined,
         stock: 0,
         categoria_id: undefined as number | undefined,
         tags: '',
@@ -38,6 +39,7 @@ export default function ProductForm({
                     nombre: editingProduct.nombre,
                     descripcion: editingProduct.descripcion || '',
                     costo: editingProduct.costo,
+                    precio_compra: editingProduct.precio_compra ?? undefined,
                     stock: editingProduct.stock,
                     categoria_id: editingProduct.categoria_id || undefined,
                     tags: editingProduct.tags || '',
@@ -48,6 +50,7 @@ export default function ProductForm({
                     nombre: '',
                     descripcion: '',
                     costo: 0,
+                    precio_compra: undefined,
                     stock: 0,
                     categoria_id: undefined,
                     tags: '',
@@ -178,11 +181,11 @@ export default function ProductForm({
                             />
                         </div>
 
-                        {/* Precio y Stock */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Precio de venta, Costo y Stock */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Precio *
+                                    Precio de venta *
                                 </label>
                                 <input
                                     type="number"
@@ -198,6 +201,27 @@ export default function ProductForm({
                                 {errors.costo && (
                                     <p className="text-red-500 text-sm mt-1">{errors.costo}</p>
                                 )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Costo <span className="text-gray-400 font-normal">(opcional)</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={formData.precio_compra ?? ''}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            precio_compra: v === '' ? undefined : (parseFloat(v) || 0)
+                                        }));
+                                    }}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="—"
+                                />
                             </div>
 
                             <div>
@@ -219,6 +243,19 @@ export default function ProductForm({
                                 )}
                             </div>
                         </div>
+
+                        {/* Margen en vivo (solo si hay costo cargado) */}
+                        {formData.precio_compra != null && formData.precio_compra > 0 && (() => {
+                            const ganancia = formData.costo - formData.precio_compra;
+                            const markup = (ganancia / formData.precio_compra) * 100;
+                            const positive = ganancia >= 0;
+                            return (
+                                <p className={`text-sm -mt-2 ${positive ? 'text-green-600' : 'text-red-600'}`}>
+                                    {positive ? 'Ganancia' : 'Pérdida'}: ${Math.abs(ganancia).toFixed(2)}{' '}
+                                    ({markup.toFixed(1)}% sobre el costo)
+                                </p>
+                            );
+                        })()}
 
                         {/* Categoría */}
                         <div>

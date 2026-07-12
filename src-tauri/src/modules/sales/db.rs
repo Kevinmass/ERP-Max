@@ -10,8 +10,11 @@ pub async fn process_sale(
     // Start a transaction
     let mut tx = pool.begin().await.map_err(|e| format!("Error starting transaction: {}", e))?;
 
-    // Calculate total by getting product prices and applying modifications
+    // Calculate total by getting product prices and applying modifications.
+    // Capture the final unit price per item so we can persist it: a sale must
+    // remember what it actually charged, even if the product's price changes later.
     let mut total = 0.0;
+    let mut precios_finales: Vec<f64> = Vec::with_capacity(sale_data.items.len());
     for item in &sale_data.items {
         let base_price: f64 = sqlx::query_scalar(
             "SELECT costo FROM productos WHERE id = ?"
@@ -23,6 +26,7 @@ pub async fn process_sale(
 
         // Use modified price if provided, otherwise use base price
         let final_price = item.precio_modificado.unwrap_or(base_price);
+        precios_finales.push(final_price);
         total += final_price * item.cantidad as f64;
     }
 
@@ -44,18 +48,20 @@ pub async fn process_sale(
     .map_err(|e| format!("Error inserting sale: {}", e))?
     .last_insert_rowid() as i32;
 
-    // Insert sale items
+    // Insert sale items, persisting the unit price actually charged.
     let mut items = Vec::new();
-    for item_data in &sale_data.items {
+    for (idx, item_data) in sale_data.items.iter().enumerate() {
+        let precio_unitario = precios_finales[idx];
         let item_id = sqlx::query(
             r#"
-            INSERT INTO venta_items (venta_id, producto_id, cantidad, entregado, estado)
-            VALUES (?, ?, ?, 0, 'pendiente')
+            INSERT INTO venta_items (venta_id, producto_id, cantidad, precio_unitario, entregado, estado)
+            VALUES (?, ?, ?, ?, 0, 'pendiente')
             "#
         )
         .bind(sale_id)
         .bind(item_data.producto_id)
         .bind(item_data.cantidad)
+        .bind(precio_unitario)
         .execute(&mut *tx)
         .await
         .map_err(|e| format!("Error inserting sale item: {}", e))?
@@ -70,8 +76,8 @@ pub async fn process_sale(
             fecha_entrega: None,
             estado: "pendiente".to_string(),
             producto_nombre: None,
-            costo: None,
-            subtotal: None,
+            costo: Some(precio_unitario),
+            subtotal: Some(precio_unitario * item_data.cantidad as f64),
         });
     }
 
@@ -146,7 +152,8 @@ pub async fn get_sales_history(
         let item_rows = sqlx::query(
             r#"
             SELECT vi.id, vi.venta_id, vi.producto_id, vi.cantidad, vi.entregado,
-                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre, p.costo
+                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre,
+                   COALESCE(vi.precio_unitario, p.costo) as costo
             FROM venta_items vi
             JOIN productos p ON vi.producto_id = p.id
             WHERE vi.venta_id = ?
@@ -227,7 +234,8 @@ pub async fn get_archived_sales(
         let item_rows = sqlx::query(
             r#"
             SELECT vi.id, vi.venta_id, vi.producto_id, vi.cantidad, vi.entregado,
-                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre, p.costo
+                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre,
+                   COALESCE(vi.precio_unitario, p.costo) as costo
             FROM venta_items vi
             JOIN productos p ON vi.producto_id = p.id
             WHERE vi.venta_id = ?
@@ -320,7 +328,8 @@ pub async fn get_sales_history_with_filter(
         let item_rows = sqlx::query(
             r#"
             SELECT vi.id, vi.venta_id, vi.producto_id, vi.cantidad, vi.entregado,
-                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre, p.costo
+                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre,
+                   COALESCE(vi.precio_unitario, p.costo) as costo
             FROM venta_items vi
             JOIN productos p ON vi.producto_id = p.id
             WHERE vi.venta_id = ?

@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
-    host: true, // Listen on all addresses
+    host: '127.0.0.1', // IPv4 loopback: the Tauri WebView2 window dials 127.0.0.1, so bind there
   },
   // clearScreen: false is recommended for Tauri
   clearScreen: false,

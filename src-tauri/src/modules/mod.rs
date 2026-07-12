@@ -69,6 +69,7 @@ pub fn register_modules<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             catalogue::exportar_catalogo_excel,
             catalogue::exportar_catalogo_pdf,
             catalogue::reimportar_precios_catalogo,
+            catalogue::aplicar_ajuste_precios,
             sales::register_sale,
             sales::get_sales_history,
             sales::delete_sale,
