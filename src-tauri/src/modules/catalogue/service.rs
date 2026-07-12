@@ -123,6 +123,7 @@ pub async fn aplicar_ajuste_precios_service(
     pool: &SqlitePool,
     product_ids: Vec<i32>,
     porcentaje: f64,
+    desde_costo: bool,
 ) -> Result<i32, String> {
     if product_ids.is_empty() {
         return Err("No se seleccionaron productos".to_string());
@@ -131,7 +132,7 @@ pub async fn aplicar_ajuste_precios_service(
         return Err("El ajuste no puede ser -100% o menor".to_string());
     }
 
-    db::aplicar_ajuste_precios(pool, &product_ids, porcentaje).await
+    db::aplicar_ajuste_precios(pool, &product_ids, porcentaje, desde_costo).await
 }
 
 pub async fn migrate_product_stock_to_inventory_service(

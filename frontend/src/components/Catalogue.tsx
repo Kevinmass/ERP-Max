@@ -201,10 +201,10 @@ export default function Catalogue() {
         setShowProductForm(true);
     };
 
-    const handleBulkAdjust = async (productIds: number[], porcentaje: number) => {
+    const handleBulkAdjust = async (productIds: number[], porcentaje: number, desdeCosto: boolean) => {
         try {
             setSaving(true);
-            const actualizados = await invoke<number>('aplicar_ajuste_precios', { productIds, porcentaje });
+            const actualizados = await invoke<number>('aplicar_ajuste_precios', { productIds, porcentaje, desdeCosto });
             await handleSearch(); // refresh with current filters
             setNotification({ message: `${actualizados} producto(s) actualizados`, type: 'success' });
         } catch (error) {

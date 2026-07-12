@@ -372,6 +372,7 @@ pub async fn aplicar_ajuste_precios(
     pool: &SqlitePool,
     product_ids: &[i32],
     porcentaje: f64,
+    desde_costo: bool,
 ) -> Result<i32, String> {
     if product_ids.is_empty() {
         return Ok(0);
@@ -396,10 +397,18 @@ pub async fn aplicar_ajuste_precios(
         let costo: f64 = row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?;
         let precio_compra: Option<f64> = row.try_get("precio_compra").ok();
 
-        // Capture the cost basis only the first time; preserve it afterwards.
-        let nuevo_precio_compra = precio_compra.unwrap_or(costo);
-        // Raise selling price, rounded to the nearest whole peso.
-        let nuevo_costo = (costo * factor).round();
+        let (nuevo_costo, nuevo_precio_compra) = if desde_costo {
+            // "From cost": set selling price = cost × (1 + %). Needs a recorded
+            // cost — skip products that don't have one. Cost stays unchanged.
+            match precio_compra {
+                Some(c) => ((c * factor).round(), c),
+                None => continue,
+            }
+        } else {
+            // "From current price": raise selling price, capturing the cost basis
+            // once (from the current price) if it isn't set yet.
+            ((costo * factor).round(), precio_compra.unwrap_or(costo))
+        };
 
         sqlx::query("UPDATE productos SET costo = ?, precio_compra = ? WHERE id = ?")
             .bind(nuevo_costo)

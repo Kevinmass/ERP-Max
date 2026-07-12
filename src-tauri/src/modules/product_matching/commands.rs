@@ -206,9 +206,11 @@ pub async fn aplicar_actualizacion_precios(
         let nuevo_precio = resultado.producto_proveedor_precio;
         let nueva_cantidad = resultado.producto_proveedor_cantidad;
         
-        // Update price (existing functionality)
+        // The supplier's price is THEIR cost to us, so it updates our purchase
+        // cost (precio_compra) — never the selling price (costo), which the user
+        // controls via the bulk repricing tool.
         if let Some(precio) = nuevo_precio {
-            let result = sqlx::query("UPDATE productos SET costo = ? WHERE id = ?")
+            let result = sqlx::query("UPDATE productos SET precio_compra = ? WHERE id = ?")
                 .bind(precio)
                 .bind(producto_interno_id)
                 .execute(&state.pool)
@@ -350,7 +352,8 @@ pub async fn reimportar_precios_excel(
         ) {
             if let Some(producto_interno_id) = resultado.producto_interno_id {
                 if let Some(nuevo_precio) = producto_precio.precio {
-                    let update_result = sqlx::query("UPDATE productos SET costo = ? WHERE id = ?")
+                    // Supplier price is our purchase cost, not our selling price.
+                    let update_result = sqlx::query("UPDATE productos SET precio_compra = ? WHERE id = ?")
                         .bind(nuevo_precio)
                         .bind(producto_interno_id)
                         .execute(&state.pool)

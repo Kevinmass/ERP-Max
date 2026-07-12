@@ -117,8 +117,10 @@ pub async fn aplicar_ajuste_precios(
     #[allow(non_snake_case)]
     productIds: Vec<i32>,
     porcentaje: f64,
+    #[allow(non_snake_case)]
+    desdeCosto: Option<bool>,
 ) -> Result<i32, String> {
-    service::aplicar_ajuste_precios_service(&pool, productIds, porcentaje).await
+    service::aplicar_ajuste_precios_service(&pool, productIds, porcentaje, desdeCosto.unwrap_or(false)).await
 }
 
 /// Export catalogue to Excel format (CSV with .xlsx extension for compatibility)

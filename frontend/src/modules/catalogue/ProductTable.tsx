@@ -9,7 +9,7 @@ interface ProductTableProps {
     onEdit: (producto: Producto) => void;
     onDelete: (productoId: number) => void;
     onRefresh: () => void;
-    onBulkAdjust: (productIds: number[], porcentaje: number) => Promise<void>;
+    onBulkAdjust: (productIds: number[], porcentaje: number, desdeCosto: boolean) => Promise<void>;
 }
 
 export default function ProductTable({
@@ -145,10 +145,10 @@ export default function ProductTable({
 
     const clearSelection = () => setSelectedIds(new Set());
 
-    const handleApplyAdjust = async (porcentaje: number) => {
+    const handleApplyAdjust = async (porcentaje: number, desdeCosto: boolean) => {
         try {
             setApplying(true);
-            await onBulkAdjust(Array.from(selectedIds), porcentaje);
+            await onBulkAdjust(Array.from(selectedIds), porcentaje, desdeCosto);
             setAdjustOpen(false);
             clearSelection();
         } catch {
