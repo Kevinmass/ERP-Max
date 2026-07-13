@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { X } from 'lucide-react';
 import {
   getImportaciones,
   getResultadosMatching,
@@ -30,6 +31,8 @@ export default function ProductMatching() {
   // State
   const [activeTab, setActiveTab] = useState<TabType>('imports');
   const [importaciones, setImportaciones] = useState<Importacion[]>([]);
+  // 0 = first 5 shown ("Ver más"), 1 = first 15 shown ("Ver todas"), 2 = all shown
+  const [importExpandStage, setImportExpandStage] = useState<0 | 1 | 2>(0);
   const [selectedImport, setSelectedImport] = useState<Importacion | null>(null);
   const [resultados, setResultados] = useState<MatchingResultado[]>([]);
   const [filteredResultados, setFilteredResultados] = useState<MatchingResultado[]>([]);
@@ -60,6 +63,7 @@ export default function ProductMatching() {
     try {
       const data = await getImportaciones();
       setImportaciones(data);
+      setImportExpandStage(0);
     } catch (err) {
       console.error('Error loading importaciones:', err);
       setError('Error al cargar importaciones');
@@ -218,13 +222,13 @@ export default function ProductMatching() {
       const result: ActualizacionPreciosResult = await aplicarActualizacionPrecios(selectedImport.id);
       
       if (result.errores.length > 0) {
-        setError(`Se actualizaron ${result.actualizados} precios. Errores: ${result.errores.join(', ')}`);
+        setError(`Se actualizaron ${result.actualizados} costos. Errores: ${result.errores.join(', ')}`);
       } else {
-        setSuccess(`Se actualizaron ${result.actualizados} precios correctamente`);
+        setSuccess(`Se actualizaron ${result.actualizados} costos correctamente`);
       }
     } catch (err) {
       console.error('Error applying price updates:', err);
-      setError(`Error al aplicar precios: ${err}`);
+      setError(`Error al aplicar costos: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -278,9 +282,9 @@ export default function ProductMatching() {
       );
       
       if (result.errores.length > 0) {
-        setError(`Se actualizaron ${result.actualizados} precios. Errores: ${result.errores.join(', ')}`);
+        setError(`Se actualizaron ${result.actualizados} costos. Errores: ${result.errores.join(', ')}`);
       } else {
-        setSuccess(`Se procesaron ${result.totalProcesados} productos y se actualizaron ${result.actualizados} precios`);
+        setSuccess(`Se procesaron ${result.totalProcesados} productos y se actualizaron ${result.actualizados} costos`);
       }
       
       // Reload results
@@ -349,9 +353,9 @@ export default function ProductMatching() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Product Matching</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Proveedores</h1>
         <p className="text-gray-600 mt-1">
-          Empareja productos de listas de precios de proveedores con tu catálogo interno
+          Empareja listas de costos de proveedores con tu catálogo interno
         </p>
       </div>
 
@@ -535,7 +539,9 @@ export default function ProductMatching() {
                   </td>
                 </tr>
               ) : (
-                importaciones.map((imp) => (
+                importaciones
+                  .slice(0, importExpandStage === 0 ? 5 : importExpandStage === 1 ? 15 : undefined)
+                  .map((imp) => (
                   <tr
                     key={imp.id}
                     className={`hover:bg-gray-50 cursor-pointer ${
@@ -579,6 +585,17 @@ export default function ProductMatching() {
               )}
             </tbody>
           </table>
+
+          {importExpandStage < 2 && importaciones.length > (importExpandStage === 0 ? 5 : 15) && (
+            <div className="px-6 py-3 border-t border-gray-200 text-center">
+              <button
+                onClick={() => setImportExpandStage(prev => prev === 0 ? 1 : 2)}
+                className="text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                {importExpandStage === 0 ? 'Ver más' : 'Ver todas'}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         /* Results */
@@ -603,7 +620,7 @@ export default function ProductMatching() {
                       : 'bg-green-600 hover:bg-green-700'
                   }`}
                 >
-                  Aplicar Precios ({stats?.confirmados || 0} confirmados)
+                  Aplicar Costos ({stats?.confirmados || 0} confirmados)
                 </button>
 
                 {/* Export Excel button */}
@@ -637,7 +654,7 @@ export default function ProductMatching() {
                         : 'bg-purple-600 hover:bg-purple-700'
                     }`}
                   >
-                    Reimportar Precios
+                    Reimportar Costos
                   </button>
                 </div>
               </div>
@@ -715,7 +732,7 @@ export default function ProductMatching() {
                         Producto Proveedor
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Precio
+                        Costo
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Producto Interno
@@ -818,7 +835,7 @@ export default function ProductMatching() {
 
       {/* Product Selection Modal */}
       {showProductModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg font-semibold">Seleccionar Producto</h3>
@@ -826,7 +843,7 @@ export default function ProductMatching() {
                 onClick={() => setShowProductModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                ✕
+                <X className="w-5 h-5" strokeWidth={1.5} />
               </button>
             </div>
             <div className="p-4 overflow-y-auto max-h-[60vh]">

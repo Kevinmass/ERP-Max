@@ -1,75 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
+import { Search, Folder, Boxes, Plus, Table2, LayoutGrid, Upload, FileSpreadsheet, FileDown, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import ProductTable from '../modules/catalogue/ProductTable';
 import ProductosGrid from '../modules/catalogue/ProductosGrid';
 import ProductForm from '../modules/catalogue/ProductForm';
-import type { Producto, ProductoResponse, Categoria, CrearProducto, ActualizarProducto } from '../modules/catalogue/types';
+import CategoryManager from '../modules/catalogue/CategoryManager';
+import type { Producto, ProductoResponse, Categoria, CrearProducto, ActualizarProducto, CrearCategoria } from '../modules/catalogue/types';
+import { sortCategoriesHierarchically, getCategoryBreadcrumb } from '../modules/catalogue/categoryTree';
 import { exportCatalogueToExcel, exportCatalogueToPdf } from '../api/catalogue';
-
-    // Helper function to get category level for indentation
-const getCategoryLevel = (categoria: Categoria, categorias: Categoria[]): number => {
-    let level = 0;
-    let currentParentId = categoria.categoria_padre_id;
-    
-    while (currentParentId) {
-        const parent = categorias.find(cat => cat.id === currentParentId);
-        if (parent) {
-            level++;
-            currentParentId = parent.categoria_padre_id;
-        } else {
-            break;
-        }
-    }
-    
-    return level;
-};
-
-// Helper function to check if category has children
-const hasChildren = (categoriaId: number, categorias: Categoria[]): boolean => {
-    return categorias.some(cat => cat.categoria_padre_id === categoriaId);
-};
-
-// Helper function to sort categories hierarchically (recursive for any level depth)
-const sortCategoriesHierarchically = (categorias: Categoria[]): Categoria[] => {
-    // Get all root categories (no parent)
-    const rootCategorias = categorias
-        .filter(cat => !cat.categoria_padre_id)
-        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
-    
-    const result: Categoria[] = [];
-    
-    // Recursive function to add category and its children
-    const addCategoryAndChildren = (category: Categoria) => {
-        result.push(category);
-        
-        // Find and sort children of this category
-        const children = categorias
-            .filter(cat => cat.categoria_padre_id === category.id)
-            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
-        
-        // Recursively add each child and their descendants
-        children.forEach(child => addCategoryAndChildren(child));
-    };
-    
-    // Add all root categories and their descendants
-    rootCategorias.forEach(rootCategory => addCategoryAndChildren(rootCategory));
-    
-    return result;
-};
-
-// Helper function to get all descendant category IDs (recursive)
-// REMOVED - Backend now handles hierarchical category filtering
+import { useToast } from '../context/ToastContext';
 
 export default function Catalogue() {
+    const [activeTab, setActiveTab] = useState<'productos' | 'categorias'>(
+        () => new URLSearchParams(window.location.search).get('tab') === 'categorias' ? 'categorias' : 'productos'
+    );
     const [productos, setProductos] = useState<Producto[]>([]);
     const [categorias, setCategorias] = useState<Categoria[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savingCategory, setSavingCategory] = useState(false);
     const [showProductForm, setShowProductForm] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
     const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    // Prefilled from ?q= when arriving from the «Hoy» search field.
+    const [searchQuery, setSearchQuery] = useState(
+        () => new URLSearchParams(window.location.search).get('q') || ''
+    );
     
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -80,7 +37,7 @@ export default function Catalogue() {
     // Export state
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
     const [exportLoading, setExportLoading] = useState(false);
-    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+    const { showToast } = useToast();
 
     const loadCategories = async () => {
         try {
@@ -190,7 +147,7 @@ export default function Catalogue() {
             await handleSearch(); // Refresh data with current filters
         } catch (error) {
             console.error('Error deleting product:', error);
-            alert('Error al eliminar el producto');
+            showToast('Error al eliminar el producto', 'error');
         } finally {
             setSaving(false);
         }
@@ -201,15 +158,46 @@ export default function Catalogue() {
         setShowProductForm(true);
     };
 
+    const handleCreateCategory = async (categoria: CrearCategoria) => {
+        try {
+            setSavingCategory(true);
+            await invoke<Categoria>('create_categoria', { categoria });
+            await loadCategories();
+        } catch (error) {
+            console.error('Error creating category:', error);
+            throw error;
+        } finally {
+            setSavingCategory(false);
+        }
+    };
+
+    const handleDeleteCategory = async (categoriaId: number) => {
+        if (!confirm('¿Estás seguro de que quieres eliminar esta categoría? Esta acción no se puede deshacer.\n\nLos productos que pertenezcan a esta categoría quedarán sin asignación de categoría.')) {
+            return;
+        }
+
+        try {
+            setSavingCategory(true);
+            await invoke('delete_categoria', { categoriaId });
+            await loadCategories();
+            await handleSearch(); // product category badges may have changed
+        } catch (error) {
+            console.error('Error deleting category:', error);
+            showToast(`Error al eliminar la categoría: ${error}`, 'error');
+        } finally {
+            setSavingCategory(false);
+        }
+    };
+
     const handleBulkAdjust = async (productIds: number[], porcentaje: number, desdeCosto: boolean) => {
         try {
             setSaving(true);
             const actualizados = await invoke<number>('aplicar_ajuste_precios', { productIds, porcentaje, desdeCosto });
             await handleSearch(); // refresh with current filters
-            setNotification({ message: `${actualizados} producto(s) actualizados`, type: 'success' });
+            showToast(`${actualizados} producto(s) actualizados`, 'success');
         } catch (error) {
             console.error('Error adjusting prices:', error);
-            setNotification({ message: 'Error al ajustar los precios', type: 'error' });
+            showToast('Error al ajustar los precios', 'error');
             throw error;
         } finally {
             setSaving(false);
@@ -222,10 +210,10 @@ export default function Catalogue() {
             setExportLoading(true);
             setIsExportDropdownOpen(false);
             await exportCatalogueToExcel();
-            setNotification({ message: 'Catálogo exportado a Excel exitosamente', type: 'success' });
+            showToast('Catálogo exportado a Excel exitosamente', 'success');
         } catch (error) {
             console.error('Error exporting to Excel:', error);
-            setNotification({ message: 'Error al exportar a Excel', type: 'error' });
+            showToast('Error al exportar a Excel', 'error');
         } finally {
             setExportLoading(false);
         }
@@ -236,24 +224,14 @@ export default function Catalogue() {
             setExportLoading(true);
             setIsExportDropdownOpen(false);
             await exportCatalogueToPdf();
-            setNotification({ message: 'Catálogo exportado a PDF exitosamente', type: 'success' });
+            showToast('Catálogo exportado a PDF exitosamente', 'success');
         } catch (error) {
             console.error('Error exporting to PDF:', error);
-            setNotification({ message: 'Error al exportar a PDF', type: 'error' });
+            showToast('Error al exportar a PDF', 'error');
         } finally {
             setExportLoading(false);
         }
     };
-
-    // Close notification after 3 seconds
-    useEffect(() => {
-        if (notification) {
-            const timer = setTimeout(() => {
-                setNotification(null);
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [notification]);
 
     return (
         <div className="space-y-6 min-h-screen">
@@ -265,7 +243,41 @@ export default function Catalogue() {
                         Gestiona tu inventario de productos y categorías
                     </p>
                 </div>
-                
+
+                <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
+                    <button
+                        onClick={() => setActiveTab('productos')}
+                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
+                            activeTab === 'productos'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                        <Boxes className="w-4 h-4" strokeWidth={1.5} /> Productos
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('categorias')}
+                        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
+                            activeTab === 'categorias'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                    >
+                        <Folder className="w-4 h-4" strokeWidth={1.5} /> Categorías
+                    </button>
+                </div>
+            </div>
+
+            {activeTab === 'categorias' ? (
+                <CategoryManager
+                    categorias={categorias}
+                    onCreateCategory={handleCreateCategory}
+                    onDeleteCategory={handleDeleteCategory}
+                    loading={savingCategory}
+                />
+            ) : (
+            <>
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between lg:flex-nowrap">
                 <div className="flex flex-wrap gap-3 items-center w-full lg:w-auto justify-start lg:justify-end">
                     {/* Search Bar */}
                     <div className="relative flex-shrink-0 w-full sm:w-auto">
@@ -277,7 +289,7 @@ export default function Catalogue() {
                             className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                         />
                         <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                            🔍
+                            <Search className="w-4 h-4" strokeWidth={1.5} />
                         </div>
                     </div>
 
@@ -288,18 +300,11 @@ export default function Catalogue() {
                         className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     >
                         <option value="">Todas las categorías</option>
-                        {sortCategoriesHierarchically(categorias).map(cat => {
-                            const level = getCategoryLevel(cat, categorias);
-                            const isParent = hasChildren(cat.id, categorias);
-                            const indent = '─'.repeat(level);
-                            const icon = isParent ? '📁' : '📄';
-                            
-                            return (
-                                <option key={cat.id} value={cat.id}>
-                                    {indent} {icon} {cat.nombre}
-                                </option>
-                            );
-                        })}
+                        {sortCategoriesHierarchically(categorias).map(cat => (
+                            <option key={cat.id} value={cat.id}>
+                                {getCategoryBreadcrumb(cat, categorias)}
+                            </option>
+                        ))}
                     </select>
 
                     {/* Search and Clear Buttons */}
@@ -308,7 +313,7 @@ export default function Catalogue() {
                         disabled={loading}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                     >
-                        <span>🔎</span>
+                        <Search className="w-4 h-4" strokeWidth={1.5} />
                         <span>Buscar</span>
                     </button>
 
@@ -330,7 +335,7 @@ export default function Catalogue() {
                                     : 'text-gray-600 hover:text-gray-900'
                             }`}
                         >
-                            📋 Tabla
+                            <span className="inline-flex items-center gap-1"><Table2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Tabla</span>
                         </button>
                         <button
                             onClick={() => setViewMode('grid')}
@@ -340,7 +345,7 @@ export default function Catalogue() {
                                     : 'text-gray-600 hover:text-gray-900'
                             }`}
                         >
-                            📱 Cuadrícula
+                            <span className="inline-flex items-center gap-1"><LayoutGrid className="w-3.5 h-3.5" strokeWidth={1.5} /> Cuadrícula</span>
                         </button>
                     </div>
                     
@@ -351,17 +356,9 @@ export default function Catalogue() {
                         }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center space-x-2"
                     >
-                        <span>➕</span>
+                        <Plus className="w-4 h-4" strokeWidth={1.5} />
                         <span>Nuevo Producto</span>
                     </button>
-
-                    <a
-                        href="/categorias"
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm flex items-center space-x-2"
-                    >
-                        <span>📁</span>
-                        <span>Gestionar Categorías</span>
-                    </a>
 
                     {/* Export Dropdown */}
                     <div className="relative">
@@ -370,9 +367,9 @@ export default function Catalogue() {
                             disabled={exportLoading}
                             className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <span>📤</span>
+                            <Upload className="w-4 h-4" strokeWidth={1.5} />
                             <span>Exportar</span>
-                            <span className={`ml-1 transition-transform ${isExportDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                            <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${isExportDropdownOpen ? 'rotate-180' : ''}`} strokeWidth={1.5} />
                         </button>
                         {isExportDropdownOpen && (
                             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
@@ -381,7 +378,7 @@ export default function Catalogue() {
                                     disabled={exportLoading}
                                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <span>📊</span>
+                                    <FileSpreadsheet className="w-4 h-4" strokeWidth={1.5} />
                                     <span>Exportar a Excel (CSV)</span>
                                 </button>
                                 <button
@@ -389,7 +386,7 @@ export default function Catalogue() {
                                     disabled={exportLoading}
                                     className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    <span>📄</span>
+                                    <FileDown className="w-4 h-4" strokeWidth={1.5} />
                                     <span>Exportar a PDF</span>
                                 </button>
                             </div>
@@ -398,10 +395,22 @@ export default function Catalogue() {
                 </div>
             </div>
 
+            {/* Pagination Controls (top) */}
+            {totalPages > 1 && (
+                <CataloguePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    pageSize={pageSize}
+                    totalProducts={totalProducts}
+                    loading={loading}
+                    onPageChange={handlePageChange}
+                />
+            )}
+
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 gap-6 min-w-0">
                 {/* Product View - Main Content */}
-                <div className="lg:col-span-3">
+                <div className="lg:col-span-3 min-w-0">
                     {viewMode === 'table' ? (
                         <ProductTable
                             productos={productos}
@@ -437,54 +446,79 @@ export default function Catalogue() {
                 loading={saving}
             />
 
-            {/* Pagination Controls */}
+            {/* Pagination Controls (bottom) */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 rounded-b-lg">
-                    <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-700">
-                            Mostrando {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalProducts)} de {totalProducts} productos
-                        </span>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                        <button
-                            onClick={() => handlePageChange(currentPage - 1)}
-                            disabled={currentPage === 1 || loading}
-                            className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Anterior
-                        </button>
-                        
-                        <span className="px-3 py-1 text-sm text-gray-700">
-                            Página {currentPage} de {totalPages}
-                        </span>
-                        
-                        <button
-                            onClick={() => handlePageChange(currentPage + 1)}
-                            disabled={currentPage === totalPages || loading}
-                            className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Siguiente
-                        </button>
-                    </div>
-                </div>
+                <CataloguePagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    pageSize={pageSize}
+                    totalProducts={totalProducts}
+                    loading={loading}
+                    onPageChange={handlePageChange}
+                />
             )}
+            </>
+            )}
+        </div>
+    );
+}
 
-            {/* Notification */}
-            {notification && (
-                <div className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 transition-all duration-300 ${
-                    notification.type === 'success' 
-                        ? 'bg-green-500 text-white' 
-                        : notification.type === 'error'
-                        ? 'bg-red-500 text-white'
-                        : 'bg-blue-500 text-white'
-                }`}>
-                    <div className="flex items-center space-x-2">
-                        <span>{notification.type === 'success' ? '✅' : notification.type === 'error' ? '❌' : 'ℹ️'}</span>
-                        <span>{notification.message}</span>
-                    </div>
-                </div>
-            )}
+function CataloguePagination({ currentPage, totalPages, pageSize, totalProducts, loading, onPageChange, className }: {
+    currentPage: number;
+    totalPages: number;
+    pageSize: number;
+    totalProducts: number;
+    loading: boolean;
+    onPageChange: (page: number) => void;
+    className?: string;
+}) {
+    return (
+        <div className={`flex items-center justify-between px-4 py-3 bg-white border border-gray-200 rounded-lg ${className ?? ''}`}>
+            <span className="text-sm text-gray-700">
+                Mostrando {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalProducts)} de {totalProducts} productos
+            </span>
+
+            <div className="flex items-center space-x-2">
+                <button
+                    onClick={() => onPageChange(1)}
+                    disabled={currentPage === 1 || loading}
+                    className="p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Primera página"
+                    aria-label="Primera página"
+                >
+                    <ChevronsLeft className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+
+                <button
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage === 1 || loading}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Anterior
+                </button>
+
+                <span className="px-3 py-1 text-sm text-gray-700">
+                    Página {currentPage} de {totalPages}
+                </span>
+
+                <button
+                    onClick={() => onPageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || loading}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Siguiente
+                </button>
+
+                <button
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={currentPage === totalPages || loading}
+                    className="p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Última página"
+                    aria-label="Última página"
+                >
+                    <ChevronsRight className="w-4 h-4" strokeWidth={1.5} />
+                </button>
+            </div>
         </div>
     );
 }

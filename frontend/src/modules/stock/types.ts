@@ -4,6 +4,8 @@ export interface InventoryItem {
     quantity: number;
     min_stock_level: number;
     is_low_stock: boolean;
+    categoria_id?: number | null;
+    thumbnail?: string | null;
 }
 
 export interface InventoryResponse {

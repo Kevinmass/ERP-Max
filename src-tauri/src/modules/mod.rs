@@ -77,6 +77,7 @@ pub fn register_modules<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             sales::unarchive_sale,
             sales::get_archived_sales,
             sales::get_sales_history_with_filter,
+            sales::get_sales_history_page,
             settings::get_settings,
             settings::save_settings,
             stock::get_inventory_list,
@@ -86,6 +87,8 @@ pub fn register_modules<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             dashboard::get_dashboard_stats,
             dashboard::get_sales_trend,
             dashboard::get_inventory_status,
+            dashboard::get_top_selling_products,
+            dashboard::get_revenue_by_category,
             dashboard::get_kpi_config,
             dashboard::update_kpi_config,
             // Product Matching commands

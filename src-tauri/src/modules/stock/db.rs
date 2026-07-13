@@ -7,7 +7,10 @@ pub async fn get_inventory_list(
     let rows = sqlx::query(
         r#"
         SELECT i.product_id, p.nombre as product_name, i.quantity, i.min_stock_level,
-               CASE WHEN i.quantity <= i.min_stock_level THEN 1 ELSE 0 END as is_low_stock
+               CASE WHEN i.quantity <= i.min_stock_level THEN 1 ELSE 0 END as is_low_stock,
+               p.categoria_id,
+               (SELECT pf.contenido_base64 FROM producto_fotos pf
+                    WHERE pf.producto_id = p.id ORDER BY pf.orden LIMIT 1) as thumbnail
         FROM inventory i
         JOIN productos p ON i.product_id = p.id
         ORDER BY p.nombre
@@ -25,6 +28,8 @@ pub async fn get_inventory_list(
             quantity: row.try_get("quantity").map_err(|e| format!("Error getting quantity: {}", e))?,
             min_stock_level: row.try_get("min_stock_level").map_err(|e| format!("Error getting min_stock_level: {}", e))?,
             is_low_stock: row.try_get::<i32, _>("is_low_stock").map_err(|e| format!("Error getting is_low_stock: {}", e))? == 1,
+            categoria_id: row.try_get("categoria_id").ok(),
+            thumbnail: row.try_get("thumbnail").ok(),
         });
     }
 

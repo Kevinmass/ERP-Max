@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { RefreshCw, Save, Wrench, Palette, Settings as SettingsIcon, Package, CircleDollarSign, AlertTriangle, BookOpen, Briefcase, TrendingUp, BarChart3, ClipboardList, CheckCircle2, Clock, Gauge } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { Settings, SettingsMap } from './types';
-import { applyTheme, applyFontSize } from '../../utils/theme';
+import { applyTheme, applyFontSize, applyDensity } from '../../utils/theme';
 import { useDashboard } from '../../context/DashboardContext';
+import { useToast } from '../../context/ToastContext';
 
 const SettingsView: React.FC = () => {
     const [settings, setSettings] = useState<Settings>({
@@ -12,18 +14,23 @@ const SettingsView: React.FC = () => {
         business_phone: '',
         business_email: '',
         business_website: '',
-        theme_name: 'blue',
         theme_variant: 'light',
+        density: 'comodo',
         font_size: 'medium',
-        language: 'en',
         tax_rate: 0,
     });
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'system'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'appearance' | 'kpis' | 'system'>(
+        () => {
+            const tab = new URLSearchParams(window.location.search).get('tab');
+            return tab === 'general' || tab === 'appearance' || tab === 'kpis' || tab === 'system' ? tab : 'general';
+        }
+    );
     
     // Dashboard context for KPI settings
     const { kpiConfig, updateKpiSettings } = useDashboard();
+    const { showToast } = useToast();
 
     // Load settings on mount
     useEffect(() => {
@@ -41,10 +48,9 @@ const SettingsView: React.FC = () => {
                 business_phone: settingsMap.business_phone || '',
                 business_email: settingsMap.business_email || '',
                 business_website: settingsMap.business_website || '',
-                theme_name: (settingsMap.theme_name as 'blue' | 'green' | 'purple' | 'professional') || 'blue',
                 theme_variant: (settingsMap.theme_variant as 'light' | 'dark') || 'light',
+                density: (settingsMap.density as 'comodo' | 'compacto') || 'comodo',
                 font_size: (settingsMap.font_size as 'small' | 'medium' | 'large') || 'medium',
-                language: (settingsMap.language as 'en' | 'es') || 'en',
                 tax_rate: parseFloat(settingsMap.tax_rate) || 0,
             });
         } catch (error) {
@@ -64,22 +70,22 @@ const SettingsView: React.FC = () => {
                 business_phone: settings.business_phone || '',
                 business_email: settings.business_email || '',
                 business_website: settings.business_website || '',
-                theme_name: settings.theme_name,
                 theme_variant: settings.theme_variant,
+                density: settings.density,
                 font_size: settings.font_size,
-                language: settings.language,
                 tax_rate: settings.tax_rate.toString(),
             };
             await invoke('save_settings', { settings: settingsMap });
 
-            // Immediately apply theme and font size changes
-            applyTheme(settings.theme_name, settings.theme_variant);
+            // Immediately apply theme, density and font size changes
+            applyTheme(settings.theme_variant);
+            applyDensity(settings.density);
             applyFontSize(settings.font_size);
 
-            alert('Configuración guardada y aplicada exitosamente!');
+            showToast('Configuración guardada y aplicada exitosamente', 'success');
         } catch (error) {
             console.error('Failed to save settings:', error);
-            alert('Error al guardar la configuración');
+            showToast('Error al guardar la configuración', 'error');
         } finally {
             setSaving(false);
         }
@@ -95,25 +101,6 @@ const SettingsView: React.FC = () => {
             const updateData: any = {};
             updateData[kpiKey] = newValue;
             await updateKpiSettings(updateData);
-        }
-    };
-
-    const themePreviews = {
-        blue: {
-            light: 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200',
-            dark: 'bg-gradient-to-br from-blue-900 to-blue-800 border-blue-700'
-        },
-        green: {
-            light: 'bg-gradient-to-br from-green-50 to-green-100 border-green-200',
-            dark: 'bg-gradient-to-br from-green-900 to-green-800 border-green-700'
-        },
-        purple: {
-            light: 'bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200',
-            dark: 'bg-gradient-to-br from-purple-900 to-purple-800 border-purple-700'
-        },
-        professional: {
-            light: 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200',
-            dark: 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-700'
         }
     };
 
@@ -149,7 +136,7 @@ const SettingsView: React.FC = () => {
                         disabled={saving}
                         className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 text-sm flex items-center space-x-2"
                     >
-                        <span>🔄</span>
+                        <RefreshCw className="w-4 h-4" strokeWidth={1.5} />
                         <span>Recargar</span>
                     </button>
                     <button
@@ -157,7 +144,7 @@ const SettingsView: React.FC = () => {
                         disabled={saving}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm flex items-center space-x-2"
                     >
-                        <span>💾</span>
+                        <Save className="w-4 h-4" strokeWidth={1.5} />
                         <span>{saving ? 'Guardando...' : 'Guardar'}</span>
                     </button>
                 </div>
@@ -168,33 +155,43 @@ const SettingsView: React.FC = () => {
                 <div className="flex border-b border-gray-200 mb-6">
                     <button
                         onClick={() => setActiveTab('general')}
-                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
+                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors inline-flex items-center gap-1.5 ${
                             activeTab === 'general'
                                 ? 'border-blue-500 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                        🔧 General
+                        <Wrench className="w-4 h-4" strokeWidth={1.5} /> General
                     </button>
                     <button
                         onClick={() => setActiveTab('appearance')}
-                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
+                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors inline-flex items-center gap-1.5 ${
                             activeTab === 'appearance'
                                 ? 'border-blue-500 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                        🎨 Apariencia
+                        <Palette className="w-4 h-4" strokeWidth={1.5} /> Apariencia
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('kpis')}
+                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors inline-flex items-center gap-1.5 ${
+                            activeTab === 'kpis'
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        <Gauge className="w-4 h-4" strokeWidth={1.5} /> KPIs de Análisis
                     </button>
                     <button
                         onClick={() => setActiveTab('system')}
-                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
+                        className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors inline-flex items-center gap-1.5 ${
                             activeTab === 'system'
                                 ? 'border-blue-500 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700'
                         }`}
                     >
-                        ⚙️ Sistema
+                        <SettingsIcon className="w-4 h-4" strokeWidth={1.5} /> Sistema
                     </button>
                 </div>
 
@@ -245,19 +242,6 @@ const SettingsView: React.FC = () => {
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Idioma del Sistema
-                                </label>
-                                <select
-                                    value={settings.language}
-                                    onChange={(e) => handleInputChange('language', e.target.value as 'en' | 'es')}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                >
-                                    <option value="en">English (Inglés)</option>
-                                    <option value="es">Español (Spanish)</option>
-                                </select>
-                            </div>
                         </div>
 
                         <div className="space-y-4">
@@ -283,64 +267,64 @@ const SettingsView: React.FC = () => {
 
                 {/* Appearance Tab */}
                 {activeTab === 'appearance' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Personalización Visual</h3>
-                            <p className="text-gray-600 mb-6">Elige el tema y apariencia de tu interfaz</p>
-                            
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Tema Principal
-                                    </label>
-                                    <select
-                                        value={settings.theme_name}
-                                        onChange={(e) => handleInputChange('theme_name', e.target.value as 'blue' | 'green' | 'purple' | 'professional')}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                    >
-                                        <option value="blue">🔵 Azul Clásico</option>
-                                        <option value="green">🟢 Verde Natural</option>
-                                        <option value="purple">🟣 Púrpura Moderno</option>
-                                        <option value="professional">⚫ Profesional</option>
-                                    </select>
-                                </div>
+                    <div className="max-w-xl">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Personalización Visual</h3>
+                        <p className="text-gray-600 mb-6">Elige el tema y apariencia de tu interfaz</p>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Variante del Tema
-                                    </label>
-                                    <select
-                                        value={settings.theme_variant}
-                                        onChange={(e) => handleInputChange('theme_variant', e.target.value as 'light' | 'dark')}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                    >
-                                        <option value="light">☀️ Claro</option>
-                                        <option value="dark">🌙 Oscuro</option>
-                                    </select>
-                                </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Modo
+                                </label>
+                                <select
+                                    value={settings.theme_variant}
+                                    onChange={(e) => handleInputChange('theme_variant', e.target.value as 'light' | 'dark')}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                >
+                                    <option value="light">Claro</option>
+                                    <option value="dark">Oscuro</option>
+                                </select>
+                            </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Tamaño de Fuente
-                                    </label>
-                                    <select
-                                        value={settings.font_size}
-                                        onChange={(e) => handleInputChange('font_size', e.target.value as 'small' | 'medium' | 'large')}
-                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                    >
-                                        <option value="small">A (Pequeño)</option>
-                                        <option value="medium">A (Mediano)</option>
-                                        <option value="large">A (Grande)</option>
-                                    </select>
-                                </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Densidad
+                                </label>
+                                <select
+                                    value={settings.density}
+                                    onChange={(e) => handleInputChange('density', e.target.value as 'comodo' | 'compacto')}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                >
+                                    <option value="comodo">Cómodo</option>
+                                    <option value="compacto">Compacto (tablas más densas)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Tamaño de Fuente
+                                </label>
+                                <select
+                                    value={settings.font_size}
+                                    onChange={(e) => handleInputChange('font_size', e.target.value as 'small' | 'medium' | 'large')}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                >
+                                    <option value="small">A (Pequeño)</option>
+                                    <option value="medium">A (Mediano)</option>
+                                    <option value="large">A (Grande)</option>
+                                </select>
                             </div>
                         </div>
+                    </div>
+                )}
 
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">KPIs del Dashboard</h3>
-                            <p className="text-gray-600 mb-6">Selecciona qué métricas deseas ver en tu panel principal</p>
-                            
-                            <div className="space-y-4">
+                {/* KPIs Tab */}
+                {activeTab === 'kpis' && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">KPIs de Análisis</h3>
+                        <p className="text-gray-600 mb-6">Selecciona qué métricas deseas ver en Análisis</p>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -349,8 +333,8 @@ const SettingsView: React.FC = () => {
                                         <p className="text-xs text-gray-500">Muestra el número total de productos activos</p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">📦</span>
-                                        <button 
+                                        <Package className="w-6 h-6 text-gray-500" strokeWidth={1.5} />
+                                        <button
                                             onClick={() => handleKpiToggle('show_total_products', !kpiConfig?.show_total_products)}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                                                 kpiConfig?.show_total_products ? 'bg-blue-500' : 'bg-gray-200'
@@ -373,8 +357,8 @@ const SettingsView: React.FC = () => {
                                         <p className="text-xs text-gray-500">Muestra el total de ventas generadas hoy</p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">💰</span>
-                                        <button 
+                                        <CircleDollarSign className="w-6 h-6 text-gray-500" strokeWidth={1.5} />
+                                        <button
                                             onClick={() => handleKpiToggle('show_today_sales', !kpiConfig?.show_today_sales)}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                                                 kpiConfig?.show_today_sales ? 'bg-blue-500' : 'bg-gray-200'
@@ -397,8 +381,8 @@ const SettingsView: React.FC = () => {
                                         <p className="text-xs text-gray-500">Muestra productos que están por debajo del stock mínimo</p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">⚠️</span>
-                                        <button 
+                                        <AlertTriangle className="w-6 h-6 text-gray-500" strokeWidth={1.5} />
+                                        <button
                                             onClick={() => handleKpiToggle('show_low_stock', !kpiConfig?.show_low_stock)}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                                                 kpiConfig?.show_low_stock ? 'bg-blue-500' : 'bg-gray-200'
@@ -421,8 +405,8 @@ const SettingsView: React.FC = () => {
                                         <p className="text-xs text-gray-500">Muestra el número total de categorías</p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">📚</span>
-                                        <button 
+                                        <BookOpen className="w-6 h-6 text-gray-500" strokeWidth={1.5} />
+                                        <button
                                             onClick={() => handleKpiToggle('show_active_categories', !kpiConfig?.show_active_categories)}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                                                 kpiConfig?.show_active_categories ? 'bg-blue-500' : 'bg-gray-200'
@@ -445,8 +429,8 @@ const SettingsView: React.FC = () => {
                                         <p className="text-xs text-gray-500">Muestra el total de ingresos acumulados</p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">💼</span>
-                                        <button 
+                                        <Briefcase className="w-6 h-6 text-gray-500" strokeWidth={1.5} />
+                                        <button
                                             onClick={() => handleKpiToggle('show_total_revenue', !kpiConfig?.show_total_revenue)}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                                                 kpiConfig?.show_total_revenue ? 'bg-blue-500' : 'bg-gray-200'
@@ -469,8 +453,8 @@ const SettingsView: React.FC = () => {
                                         <p className="text-xs text-gray-500">Muestra el número total de transacciones</p>
                                     </div>
                                     <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">📈</span>
-                                        <button 
+                                        <TrendingUp className="w-6 h-6 text-gray-500" strokeWidth={1.5} />
+                                        <button
                                             onClick={() => handleKpiToggle('show_sales_count', !kpiConfig?.show_sales_count)}
                                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                                                 kpiConfig?.show_sales_count ? 'bg-blue-500' : 'bg-gray-200'
@@ -484,40 +468,12 @@ const SettingsView: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Vista Previa del Tema</h3>
-                            <div className="bg-white rounded-xl border border-gray-200 p-6">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className={`p-4 rounded-lg border-2 ${themePreviews[settings.theme_name][settings.theme_variant]} transition-all duration-300`}>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-gray-700">Encabezado</span>
-                                            <span className="text-xs text-gray-500">H1</span>
-                                        </div>
-                                        <div className="h-2 bg-gray-300 rounded mb-2"></div>
-                                        <div className="h-2 bg-gray-300 rounded w-3/4"></div>
-                                    </div>
-                                    
-                                    <div className={`p-4 rounded-lg border-2 ${themePreviews[settings.theme_name][settings.theme_variant]} transition-all duration-300`}>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-gray-700">Botón</span>
-                                            <span className="text-xs text-gray-500">Primary</span>
-                                        </div>
-                                        <div className="h-8 bg-blue-500 rounded-lg"></div>
-                                    </div>
-                                </div>
-                                
-                                <div className="mt-4 text-center text-sm text-gray-600">
-                                    Vista previa en tiempo real del tema seleccionado
-                                </div>
-                            </div>
                         </div>
                     </div>
                 )}
 
                 {/* System Tab */}
+
                 {activeTab === 'system' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
@@ -530,7 +486,7 @@ const SettingsView: React.FC = () => {
                                             <p className="text-lg font-bold text-gray-900">1.0.0</p>
                                         </div>
                                         <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                            <span className="text-blue-600">📋</span>
+                                            <ClipboardList className="w-5 h-5 text-blue-600" strokeWidth={1.5} />
                                         </div>
                                     </div>
                                 </div>
@@ -539,10 +495,10 @@ const SettingsView: React.FC = () => {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-sm font-medium text-gray-700">Estado de la Base de Datos</p>
-                                            <p className="text-lg font-bold text-green-600">✅ Conectada</p>
+                                            <p className="text-lg font-bold text-green-600 inline-flex items-center gap-1"><CheckCircle2 className="w-4 h-4" strokeWidth={1.5} /> Conectada</p>
                                         </div>
                                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                                            <span className="text-green-600">💾</span>
+                                            <Save className="w-5 h-5 text-green-600" strokeWidth={1.5} />
                                         </div>
                                     </div>
                                 </div>
@@ -554,7 +510,7 @@ const SettingsView: React.FC = () => {
                                             <p className="text-lg font-bold text-gray-900">{new Date().toLocaleDateString()}</p>
                                         </div>
                                         <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                            <span className="text-purple-600">⏰</span>
+                                            <Clock className="w-5 h-5 text-purple-600" strokeWidth={1.5} />
                                         </div>
                                     </div>
                                 </div>
@@ -565,17 +521,17 @@ const SettingsView: React.FC = () => {
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Acciones del Sistema</h3>
                             <div className="space-y-4">
                                 <button className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-between">
-                                    <span>🔄 Reiniciar Aplicación</span>
+                                    <span className="inline-flex items-center gap-1.5"><RefreshCw className="w-4 h-4" strokeWidth={1.5} /> Reiniciar Aplicación</span>
                                     <span className="text-sm opacity-80">Requiere reinicio</span>
                                 </button>
-                                
+
                                 <button className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-between">
-                                    <span>📊 Exportar Datos</span>
+                                    <span className="inline-flex items-center gap-1.5"><BarChart3 className="w-4 h-4" strokeWidth={1.5} /> Exportar Datos</span>
                                     <span className="text-sm opacity-80">CSV, JSON, Excel</span>
                                 </button>
-                                
+
                                 <button className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-between">
-                                    <span>⚠️ Restablecer Configuración</span>
+                                    <span className="inline-flex items-center gap-1.5"><AlertTriangle className="w-4 h-4" strokeWidth={1.5} /> Restablecer Configuración</span>
                                     <span className="text-sm opacity-80">Cuidado</span>
                                 </button>
                             </div>

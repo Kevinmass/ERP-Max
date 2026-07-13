@@ -1,8 +1,11 @@
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
 interface KpiCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  icon?: string;
+  icon?: LucideIcon;
   trend?: {
     value: number;
     label: string;
@@ -21,6 +24,7 @@ export default function KpiCard({
   color = 'blue',
   className = ''
 }: KpiCardProps) {
+  const Icon = icon;
   const colorClasses = {
     blue: {
       bg: 'bg-blue-50',
@@ -61,9 +65,9 @@ export default function KpiCard({
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
-          {icon && (
+          {Icon && (
             <div className={`p-2 rounded-lg ${colors.bg} ${colors.border}`}>
-              <span className="text-2xl">{icon}</span>
+              <Icon className={`w-6 h-6 ${colors.text}`} strokeWidth={1.5} />
             </div>
           )}
           <div>
@@ -77,7 +81,9 @@ export default function KpiCard({
         {/* Trend Indicator */}
         {trend && (
           <div className={`flex items-center space-x-1 text-sm font-medium ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-            <span>{trend.isPositive ? '↗' : '↘'}</span>
+            {trend.isPositive
+              ? <TrendingUp className="w-4 h-4" strokeWidth={1.5} />
+              : <TrendingDown className="w-4 h-4" strokeWidth={1.5} />}
             <span>{Math.abs(trend.value)}%</span>
             <span className="text-gray-500">{trend.label}</span>
           </div>

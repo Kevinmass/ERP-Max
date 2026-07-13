@@ -56,3 +56,10 @@ pub struct VentaResponse {
     pub venta: Venta,
     pub items: Vec<VentaItem>,
 }
+
+// Paginated response for the Historial screen
+#[derive(Serialize, Debug)]
+pub struct SalesHistoryResponse {
+    pub data: Vec<VentaResponse>,
+    pub total: i64,
+}

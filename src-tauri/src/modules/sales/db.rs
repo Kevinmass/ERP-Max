@@ -365,3 +365,117 @@ pub async fn get_sales_history_with_filter(
 
     Ok(sales_with_items)
 }
+
+// Page-based history query used by the Historial screen: covers all three view
+// modes (active/archived/all) plus an optional "fecha >= date_from" cutoff for
+// the Hoy/Semana/Mes/Año quick filters, and returns a total count for pagination.
+pub async fn get_sales_history_paginated(
+    pool: &SqlitePool,
+    limit: i32,
+    offset: i32,
+    view_mode: &str,
+    date_from: Option<String>,
+) -> Result<(Vec<VentaResponse>, i64), String> {
+    let archived_clause = match view_mode {
+        "active" => "archivado = 0",
+        "archived" => "archivado = 1",
+        _ => "1=1",
+    };
+    let where_clause = if date_from.is_some() {
+        format!("{} AND fecha >= ?", archived_clause)
+    } else {
+        archived_clause.to_string()
+    };
+
+    let count_sql = format!("SELECT COUNT(*) as cnt FROM ventas WHERE {}", where_clause);
+    let mut count_query = sqlx::query(&count_sql);
+    if let Some(ref d) = date_from {
+        count_query = count_query.bind(d);
+    }
+    let total: i64 = count_query
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("Error counting sales: {}", e))?
+        .try_get("cnt")
+        .map_err(|e| format!("Error reading sales count: {}", e))?;
+
+    let rows_sql = format!(
+        r#"
+        SELECT id, fecha, estado, total, observaciones,
+               cliente_nombre, cliente_domicilio, cliente_localidad, cliente_telefono, archivado
+        FROM ventas
+        WHERE {}
+        ORDER BY fecha DESC
+        LIMIT ? OFFSET ?
+        "#,
+        where_clause
+    );
+    let mut rows_query = sqlx::query(&rows_sql);
+    if let Some(ref d) = date_from {
+        rows_query = rows_query.bind(d);
+    }
+    rows_query = rows_query.bind(limit).bind(offset);
+
+    let rows = rows_query
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Error fetching sales: {}", e))?;
+
+    let mut sales = Vec::new();
+    for row in rows {
+        sales.push(Venta {
+            id: row.try_get("id").map_err(|e| format!("Error getting id: {}", e))?,
+            fecha: row.try_get("fecha").map_err(|e| format!("Error getting fecha: {}", e))?,
+            estado: row.try_get("estado").map_err(|e| format!("Error getting estado: {}", e))?,
+            total: row.try_get("total").map_err(|e| format!("Error getting total: {}", e))?,
+            observaciones: row.try_get("observaciones").map_err(|e| format!("Error getting observaciones: {}", e))?,
+            cliente_nombre: row.try_get("cliente_nombre").map_err(|e| format!("Error getting cliente_nombre: {}", e))?,
+            cliente_domicilio: row.try_get("cliente_domicilio").map_err(|e| format!("Error getting cliente_domicilio: {}", e))?,
+            cliente_localidad: row.try_get("cliente_localidad").map_err(|e| format!("Error getting cliente_localidad: {}", e))?,
+            cliente_telefono: row.try_get("cliente_telefono").map_err(|e| format!("Error getting cliente_telefono: {}", e))?,
+            archivado: row.try_get("archivado").map_err(|e| format!("Error getting archivado: {}", e))?,
+        });
+    }
+
+    let mut sales_with_items = Vec::new();
+    for venta in sales {
+        let item_rows = sqlx::query(
+            r#"
+            SELECT vi.id, vi.venta_id, vi.producto_id, vi.cantidad, vi.entregado,
+                   vi.fecha_entrega, vi.estado, p.nombre as producto_nombre,
+                   COALESCE(vi.precio_unitario, p.costo) as costo
+            FROM venta_items vi
+            JOIN productos p ON vi.producto_id = p.id
+            WHERE vi.venta_id = ?
+            "#,
+        )
+        .bind(venta.id)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("Error fetching items for sale {}: {}", venta.id, e))?;
+
+        let mut items = Vec::new();
+        for row in item_rows {
+            let costo: f64 = row.try_get("costo").map_err(|e| format!("Error getting costo: {}", e))?;
+            let cantidad: i32 = row.try_get("cantidad").map_err(|e| format!("Error getting cantidad: {}", e))?;
+            let subtotal = costo * cantidad as f64;
+
+            items.push(VentaItem {
+                id: row.try_get("id").map_err(|e| format!("Error getting item id: {}", e))?,
+                venta_id: row.try_get("venta_id").map_err(|e| format!("Error getting venta_id: {}", e))?,
+                producto_id: row.try_get("producto_id").map_err(|e| format!("Error getting producto_id: {}", e))?,
+                cantidad,
+                entregado: row.try_get("entregado").map_err(|e| format!("Error getting entregado: {}", e))?,
+                fecha_entrega: row.try_get("fecha_entrega").map_err(|e| format!("Error getting fecha_entrega: {}", e))?,
+                estado: row.try_get("estado").map_err(|e| format!("Error getting item estado: {}", e))?,
+                producto_nombre: row.try_get("producto_nombre").map_err(|e| format!("Error getting producto_nombre: {}", e))?,
+                costo: Some(costo),
+                subtotal: Some(subtotal),
+            });
+        }
+
+        sales_with_items.push(VentaResponse { venta, items });
+    }
+
+    Ok((sales_with_items, total))
+}

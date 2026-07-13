@@ -1,12 +1,13 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { SettingsMap } from '../modules/settings/types';
-import { applyTheme, applyFontSize } from '../utils/theme';
+import { applyTheme, applyFontSize, applyDensity } from '../utils/theme';
 // We don't need useLayout anymore for the layout container logic!
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Breadcrumb from './Breadcrumb';
 import StatusBar from './StatusBar';
+import CommandPalette from './CommandPalette';
 import { useLayout } from '../context/LayoutContext';
 
 interface LayoutProps {
@@ -15,20 +16,19 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
     useLayout();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Apply theme and font size on app startup
     useEffect(() => {
         const applySettings = async () => {
             try {
                 const settings: SettingsMap = await invoke('get_settings');
-                // Added 'as any' to bypass strict type checks on incoming rust data if needed
-                const themeName = (settings.theme_name as any) || 'blue';
                 const themeVariant = (settings.theme_variant as any) || 'light';
                 const fontSize = (settings.font_size as any) || 'medium';
+                const density = (settings.density as any) || 'comodo';
 
-                applyTheme(themeName, themeVariant);
+                applyTheme(themeVariant);
                 applyFontSize(fontSize);
+                applyDensity(density);
             } catch (error) {
                 console.error('Failed to load theme/font settings:', error);
             }
@@ -36,23 +36,15 @@ export default function Layout({ children }: LayoutProps) {
         applySettings();
     }, []);
 
-    const handleMobileMenuToggle = () => {
-        setIsMobileMenuOpen(!isMobileMenuOpen);
-    };
-
-
     return (
-        <div className="flex h-screen w-full bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+        <div className="flex h-screen w-full overflow-hidden" style={{ backgroundColor: 'var(--app-bg)' }}>
             {/* Sidebar handles its own width and collapsing logic */}
             <Sidebar />
 
             <div 
                 className="flex-1 flex flex-col h-full overflow-hidden relative"
             >
-                <Header
-                    onMobileMenuToggle={handleMobileMenuToggle}
-                    isMobileMenuOpen={isMobileMenuOpen}
-                />
+                <Header />
 
                 <div className="px-6 pt-4">
                     <Breadcrumb />
@@ -69,6 +61,8 @@ export default function Layout({ children }: LayoutProps) {
 
                 <StatusBar />
             </div>
+
+            <CommandPalette />
         </div>
     );
 }

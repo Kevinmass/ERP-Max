@@ -18,6 +18,7 @@ pub fn get_commands<R: Runtime>() -> Box<dyn Fn(Builder<R>) -> Builder<R> + Send
         archive_sale,
         unarchive_sale,
         get_archived_sales,
-        get_sales_history_with_filter
+        get_sales_history_with_filter,
+        get_sales_history_page
     ]))
 }

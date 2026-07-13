@@ -1,20 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useLayout } from '../context/LayoutContext';
-import { useAuth } from '../context/AuthContext';
 import { SettingsMap } from '../modules/settings/types';
 
-interface HeaderProps {
-    onMobileMenuToggle?: () => void;
-    isMobileMenuOpen?: boolean;
-}
-
-export default function Header({ onMobileMenuToggle, isMobileMenuOpen }: HeaderProps) {
+export default function Header() {
     const location = useLocation();
     const navigate = useNavigate();
     const { toggleSidebar } = useLayout();
-    const { user } = useAuth();
     const [companyName, setCompanyName] = useState('ERP System');
     const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -43,11 +37,11 @@ export default function Header({ onMobileMenuToggle, isMobileMenuOpen }: HeaderP
     }, []);
 
     const formatTime = (date: Date) => {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
     };
 
     const formatDate = (date: Date) => {
-        return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        return date.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
     };
 
     const handleHomeClick = () => {
@@ -87,19 +81,19 @@ export default function Header({ onMobileMenuToggle, isMobileMenuOpen }: HeaderP
                                 onClick={handleHomeClick}
                                 className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
                             >
-                                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                                    <span className="text-white font-bold text-lg">E</span>
+                                {/* Taller mark: graphite plate, amber initial — industrial signage */}
+                                <div
+                                    className="w-9 h-9 rounded flex items-center justify-center"
+                                    style={{ backgroundColor: 'var(--color-neutral-900)' }}
+                                >
+                                    <span className="font-bold text-lg" style={{ color: 'var(--accent)' }}>
+                                        {companyName.charAt(0).toUpperCase()}
+                                    </span>
                                 </div>
-                                <div className="hidden md:block">
-                                    <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                <div className="hidden md:block text-left">
+                                    <h1 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
                                         {companyName}
                                     </h1>
-                                    <p 
-                                        className="text-xs"
-                                        style={{ color: 'var(--color-neutral-600)' }}
-                                    >
-                                        Enterprise Resource Planning
-                                    </p>
                                 </div>
                             </button>
                         </div>
@@ -111,10 +105,12 @@ export default function Header({ onMobileMenuToggle, isMobileMenuOpen }: HeaderP
                                     className="text-lg font-semibold"
                                     style={{ color: 'var(--color-neutral-900)' }}
                                 >
-                                    {location.pathname === '/' && 'Dashboard'}
+                                    {location.pathname === '/' && 'Hoy'}
                                     {location.pathname === '/catalogue' && 'CATALOGO'}
                                     {location.pathname === '/sales' && 'VENTAS'}
                                     {location.pathname === '/stock' && 'INVENTARIO'}
+                                    {location.pathname === '/analisis' && 'ANALISIS'}
+                                    {location.pathname === '/matching' && 'PROVEEDORES'}
                                     {location.pathname === '/settings' && 'CONFIGURACION'}
                                 </h2>
                                 <p 
@@ -128,114 +124,21 @@ export default function Header({ onMobileMenuToggle, isMobileMenuOpen }: HeaderP
 
                         {/* Right Section: Actions & Time */}
                         <div className="flex items-center space-x-4">
-                            {/* Quick Actions */}
-                            <div className="hidden sm:flex items-center space-x-2">
-                                <Link
-                                    to="/catalogue"
-                                    className="p-2 rounded-lg transition-colors"
-                                    style={{ 
-                                        color: 'var(--color-neutral-600)',
-                                    }}
-                                    title="Add Product"
-                                >
-                                    <span className="text-lg">➕</span>
-                                </Link>
-                                <Link
-                                    to="/sales"
-                                    className="p-2 rounded-lg transition-colors"
-                                    style={{ 
-                                        color: 'var(--color-neutral-600)',
-                                    }}
-                                    title="New Sale"
-                                >
-                                    <span className="text-lg">💰</span>
-                                </Link>
-                                <Link
-                                    to="/stock"
-                                    className="p-2 rounded-lg transition-colors"
-                                    style={{ 
-                                        color: 'var(--color-neutral-600)',
-                                    }}
-                                    title="Check Inventory"
-                                >
-                                    <span className="text-lg">📦</span>
-                                </Link>
-                            </div>
-
-                            {/* Time Display */}
-                            <div className="text-right">
-                                <p 
-                                    className="text-sm font-medium"
-                                    style={{ color: 'var(--color-neutral-900)' }}
-                                >
-                                    {formatTime(currentTime)}
-                                </p>
-                                <p 
-                                    className="text-xs"
-                                    style={{ color: 'var(--color-neutral-600)' }}
-                                >
-                                    {formatDate(currentTime)}
-                                </p>
-                            </div>
-
-                            {/* User Avatar */}
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer hover:scale-105 transition-transform">
-                                {user ? user.name.charAt(0).toUpperCase() : 'U'}
-                            </div>
+                            {/* Command palette trigger */}
+                            <button
+                                onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
+                                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-colors"
+                                style={{ borderColor: 'var(--color-surface-300)', color: 'var(--color-neutral-500)' }}
+                                title="Buscar (Ctrl+K)"
+                            >
+                                <Search className="w-4 h-4" strokeWidth={1.5} />
+                                <span className="hidden md:inline">Buscar</span>
+                                <kbd className="px-1.5 py-0.5 text-xs font-mono bg-gray-100 rounded">Ctrl+K</kbd>
+                            </button>
                         </div>
                     </div>
                 </div>
             </header>
-
-            {/* Mobile Navigation Menu */}
-            {isMobileMenuOpen && (
-                <div 
-                    className="md:hidden border-b shadow-lg"
-                    style={{ 
-                        backgroundColor: 'var(--color-surface-100)',
-                        borderColor: 'var(--color-surface-200)'
-                    }}
-                >
-                    <div className="px-4 py-3 space-y-1">
-                        <div 
-                            className="px-3 py-2 text-sm font-medium border-b"
-                            style={{ 
-                                color: 'var(--color-neutral-500)',
-                                borderColor: 'var(--color-surface-200)'
-                            }}
-                        >
-                            Quick Actions
-                        </div>
-                        <Link
-                            to="/catalogue"
-                            onClick={onMobileMenuToggle}
-                            className="flex items-center space-x-3 px-3 py-2 rounded-lg text-base font-medium transition-colors"
-                            style={{ color: 'var(--color-neutral-700)' }}
-                        >
-                            <span className="text-lg">➕</span>
-                            <span>Add Product</span>
-                        </Link>
-                        <Link
-                            to="/sales"
-                            onClick={onMobileMenuToggle}
-                            className="flex items-center space-x-3 px-3 py-2 rounded-lg text-base font-medium transition-colors"
-                            style={{ color: 'var(--color-neutral-700)' }}
-                        >
-                            <span className="text-lg">💰</span>
-                            <span>New Sale</span>
-                        </Link>
-                        <Link
-                            to="/stock"
-                            onClick={onMobileMenuToggle}
-                            className="flex items-center space-x-3 px-3 py-2 rounded-lg text-base font-medium transition-colors"
-                            style={{ color: 'var(--color-neutral-700)' }}
-                        >
-                            <span className="text-lg">📦</span>
-                            <span>Check Inventory</span>
-                        </Link>
-                    </div>
-                </div>
-            )}
         </>
     );
 }

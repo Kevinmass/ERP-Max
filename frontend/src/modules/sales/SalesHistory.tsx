@@ -1,14 +1,37 @@
 import { useState, useEffect } from 'react';
+import { Package, FileDown, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import type { VentaResponse } from './types';
 import { generateSaleReceiptPDF, formatBusinessInfo, formatCustomerInfo } from '../../utils/pdfGenerator';
 import { Settings } from '../settings/types';
+import { useToast } from '../../context/ToastContext';
+
+type DateRange = 'today' | 'week' | 'month' | 'year' | 'all';
+
+// Cutoff for the quick date filters. `fecha` is stored in UTC (chrono's to_rfc3339),
+// so we anchor ranges to local midnight and convert to UTC for the ">=" comparison —
+// good enough for a quick filter, not meant as a precise reporting boundary.
+function computeDateFrom(range: DateRange): string | undefined {
+    if (range === 'all') return undefined;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    if (range === 'week') {
+        start.setDate(start.getDate() - 6);
+    } else if (range === 'month') {
+        start.setDate(1);
+    } else if (range === 'year') {
+        start.setMonth(0, 1);
+    }
+    return start.toISOString();
+}
+
+const PAGE_SIZE = 20;
 
 export default function SalesHistory() {
     const [sales, setSales] = useState<VentaResponse[]>([]);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [page, setPage] = useState(0);
-    const [hasMore, setHasMore] = useState(true);
+    const [page, setPage] = useState(1);
     const [deletingSaleId, setDeletingSaleId] = useState<number | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [saleToDelete, setSaleToDelete] = useState<VentaResponse | null>(null);
@@ -20,37 +43,25 @@ export default function SalesHistory() {
     const [saleToUnarchive, setSaleToUnarchive] = useState<VentaResponse | null>(null);
     const [downloadingSaleId, setDownloadingSaleId] = useState<number | null>(null);
     const [viewMode, setViewMode] = useState<'active' | 'archived' | 'all'>('active');
-    const limit = 20;
+    const [dateRange, setDateRange] = useState<DateRange>('all');
+    const { showToast } = useToast();
 
     useEffect(() => {
         loadSales();
-    }, [page, viewMode]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page, viewMode, dateRange]);
 
     const loadSales = async () => {
         try {
             setLoading(true);
-            let result: VentaResponse[];
-            
-            if (viewMode === 'archived') {
-                result = await invoke<VentaResponse[]>('get_archived_sales', {
-                    limit,
-                    offset: page * limit
-                });
-            } else {
-                result = await invoke<VentaResponse[]>('get_sales_history_with_filter', {
-                    limit,
-                    offset: page * limit,
-                    onlyActive: viewMode === 'active'
-                });
-            }
-
-            if (page === 0) {
-                setSales(result);
-            } else {
-                setSales(prev => [...prev, ...result]);
-            }
-
-            setHasMore(result.length === limit);
+            const result = await invoke<{ data: VentaResponse[]; total: number }>('get_sales_history_page', {
+                limit: PAGE_SIZE,
+                offset: (page - 1) * PAGE_SIZE,
+                viewMode,
+                dateFrom: computeDateFrom(dateRange),
+            });
+            setSales(result.data);
+            setTotal(result.total);
         } catch (error) {
             console.error('Error loading sales history:', error);
         } finally {
@@ -58,10 +69,16 @@ export default function SalesHistory() {
         }
     };
 
-    const loadMore = () => {
-        if (!loading && hasMore) {
-            setPage(prev => prev + 1);
-        }
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+    const changeViewMode = (mode: 'active' | 'archived' | 'all') => {
+        setViewMode(mode);
+        setPage(1);
+    };
+
+    const changeDateRange = (range: DateRange) => {
+        setDateRange(range);
+        setPage(1);
     };
 
     const handleDeleteSale = async (saleResponse: VentaResponse) => {
@@ -89,11 +106,11 @@ export default function SalesHistory() {
             
             // Remove the deleted sale from the list
             setSales(prev => prev.filter(sale => sale.venta.id !== saleId));
-            alert('Venta eliminada exitosamente');
+            showToast('Venta eliminada exitosamente', 'success');
         } catch (error) {
             console.error('Error deleting sale:', error);
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido al eliminar la venta';
-            alert(`Error al eliminar la venta: ${errorMessage}`);
+            showToast(`Error al eliminar la venta: ${errorMessage}`, 'error');
         } finally {
             setDeletingSaleId(null);
             setShowDeleteConfirm(false);
@@ -111,11 +128,11 @@ export default function SalesHistory() {
             
             // Remove the archived sale from the list
             setSales(prev => prev.filter(sale => sale.venta.id !== saleId));
-            alert('Venta archivada exitosamente');
+            showToast('Venta archivada exitosamente', 'success');
         } catch (error) {
             console.error('Error archiving sale:', error);
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido al archivar la venta';
-            alert(`Error al archivar la venta: ${errorMessage}`);
+            showToast(`Error al archivar la venta: ${errorMessage}`, 'error');
         } finally {
             setArchivingSaleId(null);
             setShowArchiveConfirm(false);
@@ -133,11 +150,11 @@ export default function SalesHistory() {
             
             // Remove the unarchived sale from the list
             setSales(prev => prev.filter(sale => sale.venta.id !== saleId));
-            alert('Venta desarchivada exitosamente');
+            showToast('Venta desarchivada exitosamente', 'success');
         } catch (error) {
             console.error('Error unarchiving sale:', error);
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido al desarchivar la venta';
-            alert(`Error al desarchivar la venta: ${errorMessage}`);
+            showToast(`Error al desarchivar la venta: ${errorMessage}`, 'error');
         } finally {
             setUnarchivingSaleId(null);
             setShowUnarchiveConfirm(false);
@@ -173,10 +190,9 @@ export default function SalesHistory() {
                 business_phone: settingsMap.business_phone || '',
                 business_email: settingsMap.business_email || '',
                 business_website: settingsMap.business_website || '',
-                theme_name: (settingsMap.theme_name as 'blue' | 'green' | 'purple' | 'professional') || 'blue',
                 theme_variant: (settingsMap.theme_variant as 'light' | 'dark') || 'light',
+                density: (settingsMap.density as 'comodo' | 'compacto') || 'comodo',
                 font_size: (settingsMap.font_size as 'small' | 'medium' | 'large') || 'medium',
-                language: (settingsMap.language as 'en' | 'es') || 'en',
                 tax_rate: parseFloat(settingsMap.tax_rate) || 0,
             };
 
@@ -187,10 +203,10 @@ export default function SalesHistory() {
                 formatCustomerInfo(saleResponse.venta)
             );
             
-            alert('PDF generado exitosamente');
+            showToast('PDF generado exitosamente', 'success');
         } catch (error) {
             console.error('Error generating PDF:', error);
-            alert('Error al generar el PDF');
+            showToast('Error al generar el PDF', 'error');
         } finally {
             setDownloadingSaleId(null);
         }
@@ -208,9 +224,79 @@ export default function SalesHistory() {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Historial de Ventas</h2>
-
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                {/* View Mode Tabs */}
+                <div className="px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex space-x-2">
+                        <button
+                            onClick={() => changeViewMode('active')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                viewMode === 'active'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Activas
+                        </button>
+                        <button
+                            onClick={() => changeViewMode('archived')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                viewMode === 'archived'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Archivadas
+                        </button>
+                        <button
+                            onClick={() => changeViewMode('all')}
+                            className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                viewMode === 'all'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Todas
+                        </button>
+                    </div>
+
+                    {/* Date range quick filters */}
+                    <div className="flex space-x-2">
+                        {([
+                            { value: 'today', label: 'Hoy' },
+                            { value: 'week', label: 'Semana' },
+                            { value: 'month', label: 'Mes' },
+                            { value: 'year', label: 'Año' },
+                            { value: 'all', label: 'Todo' },
+                        ] as { value: DateRange; label: string }[]).map(({ value, label }) => (
+                            <button
+                                key={value}
+                                onClick={() => changeDateRange(value)}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                                    dateRange === value
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {totalPages > 1 && (
+                    <div className="px-6 py-3 border-b border-gray-200">
+                        <PaginationBar
+                            page={page}
+                            totalPages={totalPages}
+                            total={total}
+                            loading={loading}
+                            onPrev={() => setPage(p => p - 1)}
+                            onNext={() => setPage(p => p + 1)}
+                        />
+                    </div>
+                )}
+
                 <ul className="divide-y divide-gray-200">
                     {sales.length === 0 && !loading ? (
                         <li className="px-6 py-4 text-center text-gray-500">
@@ -234,8 +320,8 @@ export default function SalesHistory() {
                                                     {saleResponse.venta.estado}
                                                 </span>
                                                 {saleResponse.venta.archivado && (
-                                                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                                        📦 Archivada
+                                                    <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                                        <Package className="w-3 h-3" strokeWidth={1.5} /> Archivada
                                                     </span>
                                                 )}
                                             </div>
@@ -243,34 +329,34 @@ export default function SalesHistory() {
                                                 <button
                                                     onClick={() => handleDownloadPDF(saleResponse)}
                                                     disabled={loading || downloadingSaleId !== null}
-                                                    className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
                                                 >
-                                                    📄 PDF
+                                                    <FileDown className="w-3.5 h-3.5" strokeWidth={1.5} /> PDF
                                                 </button>
                                                 {viewMode === 'active' && (
                                                     <button
                                                         onClick={() => handleArchiveSale(saleResponse)}
                                                         disabled={loading || archivingSaleId !== null}
-                                                        className="px-3 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="px-3 py-1 bg-orange-100 hover:bg-orange-200 text-orange-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
                                                     >
-                                                        📦 Archivar
+                                                        <Package className="w-3.5 h-3.5" strokeWidth={1.5} /> Archivar
                                                     </button>
                                                 )}
                                                 {viewMode === 'archived' && (
                                                     <button
                                                         onClick={() => handleUnarchiveSale(saleResponse)}
                                                         disabled={loading || unarchivingSaleId !== null}
-                                                        className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
                                                     >
-                                                        🔄 Desarchivar
+                                                        <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.5} /> Desarchivar
                                                     </button>
                                                 )}
                                                 <button
                                                     onClick={() => handleDeleteSale(saleResponse)}
                                                     disabled={loading || deletingSaleId !== null}
-                                                    className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
                                                 >
-                                                    🗑️ Eliminar
+                                                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} /> Eliminar
                                                 </button>
                                             </div>
                                         </div>
@@ -306,72 +392,25 @@ export default function SalesHistory() {
                     )}
                 </ul>
 
-                {/* View Mode Tabs */}
-                <div className="px-6 py-4 border-t border-gray-200">
-                    <div className="flex space-x-2">
-                        <button
-                            onClick={() => {
-                                setViewMode('active');
-                                setPage(0);
-                                setSales([]);
-                            }}
-                            className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                viewMode === 'active'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Activas
-                        </button>
-                        <button
-                            onClick={() => {
-                                setViewMode('archived');
-                                setPage(0);
-                                setSales([]);
-                            }}
-                            className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                viewMode === 'archived'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Archivadas
-                        </button>
-                        <button
-                            onClick={() => {
-                                setViewMode('all');
-                                setPage(0);
-                                setSales([]);
-                            }}
-                            className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                viewMode === 'all'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                        >
-                            Todas
-                        </button>
-                    </div>
-                </div>
-
-                {hasMore && (
-                    <div className="px-6 py-4 bg-gray-50 text-center">
-                        <button
-                            onClick={loadMore}
-                            disabled={loading}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                        >
-                            {loading ? 'Cargando...' : 'Cargar más'}
-                        </button>
+                {totalPages > 1 && (
+                    <div className="px-6 py-4 bg-gray-50">
+                        <PaginationBar
+                            page={page}
+                            totalPages={totalPages}
+                            total={total}
+                            loading={loading}
+                            onPrev={() => setPage(p => p - 1)}
+                            onNext={() => setPage(p => p + 1)}
+                        />
                     </div>
                 )}
 
                 {/* Delete Confirmation Modal */}
                 {showDeleteConfirm && saleToDelete && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                             <div className="flex items-center space-x-3 mb-4">
-                                <span className="text-red-600 text-2xl">⚠️</span>
+                                <AlertTriangle className="w-6 h-6 text-red-600" strokeWidth={1.5} />
                                 <h3 className="text-lg font-semibold text-gray-900">
                                     Confirmar eliminación
                                 </h3>
@@ -420,10 +459,10 @@ export default function SalesHistory() {
 
                 {/* Archive Confirmation Modal */}
                 {showArchiveConfirm && saleToArchive && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                             <div className="flex items-center space-x-3 mb-4">
-                                <span className="text-orange-600 text-2xl">📦</span>
+                                <Package className="w-6 h-6 text-orange-600" strokeWidth={1.5} />
                                 <h3 className="text-lg font-semibold text-gray-900">
                                     Confirmar archivado
                                 </h3>
@@ -472,10 +511,10 @@ export default function SalesHistory() {
 
                 {/* Unarchive Confirmation Modal */}
                 {showUnarchiveConfirm && saleToUnarchive && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
                             <div className="flex items-center space-x-3 mb-4">
-                                <span className="text-green-600 text-2xl">🔄</span>
+                                <RefreshCw className="w-6 h-6 text-green-600" strokeWidth={1.5} />
                                 <h3 className="text-lg font-semibold text-gray-900">
                                     Confirmar desarchivado
                                 </h3>
@@ -522,6 +561,39 @@ export default function SalesHistory() {
                     </div>
                 )}
 
+            </div>
+        </div>
+    );
+}
+
+function PaginationBar({ page, totalPages, total, loading, onPrev, onNext }: {
+    page: number;
+    totalPages: number;
+    total: number;
+    loading: boolean;
+    onPrev: () => void;
+    onNext: () => void;
+}) {
+    return (
+        <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">
+                {total} venta(s) · página {page} de {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onPrev}
+                    disabled={page === 1 || loading}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Anterior
+                </button>
+                <button
+                    onClick={onNext}
+                    disabled={page === totalPages || loading}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Siguiente
+                </button>
             </div>
         </div>
     );

@@ -1,5 +1,5 @@
 use sqlx::SqlitePool;
-use crate::modules::dashboard::models::{DashboardStats, SalesTrend, InventoryStatus, DashboardResponse, KpiConfig};
+use crate::modules::dashboard::models::{DashboardStats, SalesTrend, InventoryStatus, DashboardResponse, KpiConfig, TopProduct, CategoryRevenue};
 use crate::modules::settings::service::get_setting;
 
 pub async fn get_dashboard_stats(pool: &SqlitePool) -> Result<DashboardStats, sqlx::Error> {
@@ -7,17 +7,25 @@ pub async fn get_dashboard_stats(pool: &SqlitePool) -> Result<DashboardStats, sq
     let today_str = today.format("%Y-%m-%d").to_string();
     
     let stats = sqlx::query_as::<_, DashboardStats>(r#"
-        SELECT 
+        SELECT
             (SELECT COUNT(*) FROM productos WHERE archivado = 0) as total_products,
             COALESCE((SELECT SUM(total) FROM ventas WHERE DATE(fecha) = ? AND archivado = 0), 0.0) as today_sales,
-            (SELECT COUNT(*) FROM productos p 
-             LEFT JOIN inventory i ON p.id = i.product_id 
+            (SELECT COUNT(*) FROM productos p
+             LEFT JOIN inventory i ON p.id = i.product_id
              WHERE p.archivado = 0 AND (i.quantity IS NULL OR i.quantity <= i.min_stock_level)) as low_stock_items,
             (SELECT COUNT(*) FROM categorias WHERE archivado = 0) as active_categories,
             COALESCE((SELECT SUM(total) FROM ventas WHERE archivado = 0), 0.0) as total_revenue,
-            (SELECT COUNT(*) FROM ventas WHERE archivado = 0) as sales_count
+            (SELECT COUNT(*) FROM ventas WHERE archivado = 0) as sales_count,
+            (SELECT COUNT(*) FROM ventas WHERE DATE(fecha) = ? AND archivado = 0) as today_sales_count,
+            COALESCE((
+                SELECT SUM(vi.cantidad) FROM venta_items vi
+                JOIN ventas v ON vi.venta_id = v.id
+                WHERE DATE(v.fecha) = ? AND v.archivado = 0
+            ), 0) as today_items_sold
     "#)
-    .bind(today_str)
+    .bind(&today_str)
+    .bind(&today_str)
+    .bind(&today_str)
     .fetch_one(pool)
     .await?;
     
@@ -64,6 +72,48 @@ pub async fn get_inventory_status(pool: &SqlitePool) -> Result<Vec<InventoryStat
     .await?;
     
     Ok(status)
+}
+
+pub async fn get_top_selling_products(pool: &SqlitePool, limit: i32) -> Result<Vec<TopProduct>, sqlx::Error> {
+    let products = sqlx::query_as::<_, TopProduct>(r#"
+        SELECT
+            p.id as producto_id,
+            p.nombre as nombre,
+            SUM(vi.cantidad) as cantidad_vendida,
+            SUM(vi.cantidad * COALESCE(vi.precio_unitario, p.costo)) as ingresos
+        FROM venta_items vi
+        JOIN ventas v ON vi.venta_id = v.id
+        JOIN productos p ON vi.producto_id = p.id
+        WHERE v.archivado = 0
+        GROUP BY p.id, p.nombre
+        ORDER BY cantidad_vendida DESC
+        LIMIT ?
+    "#)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(products)
+}
+
+pub async fn get_revenue_by_category(pool: &SqlitePool) -> Result<Vec<CategoryRevenue>, sqlx::Error> {
+    let revenue = sqlx::query_as::<_, CategoryRevenue>(r#"
+        SELECT
+            COALESCE(c.nombre, 'Sin categoría') as categoria,
+            SUM(vi.cantidad * COALESCE(vi.precio_unitario, p.costo)) as ingresos
+        FROM venta_items vi
+        JOIN ventas v ON vi.venta_id = v.id
+        JOIN productos p ON vi.producto_id = p.id
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        WHERE v.archivado = 0
+        GROUP BY categoria
+        ORDER BY ingresos DESC
+        LIMIT 8
+    "#)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(revenue)
 }
 
 pub async fn get_kpi_config(pool: &SqlitePool) -> Result<KpiConfig, sqlx::Error> {

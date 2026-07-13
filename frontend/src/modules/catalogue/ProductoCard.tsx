@@ -1,6 +1,7 @@
 
 import type { Producto } from './types';
 import { useState, useEffect } from 'react';
+import { Folder } from 'lucide-react';
 import ImageZoomModal from '../../components/ImageZoomModal';
 
 interface ProductoCardProps {
@@ -102,7 +103,7 @@ export default function ProductoCard({ producto, categoriaNombre, onEdit, onDele
                                 e.stopPropagation();
                                 handlePrevImage();
                             }}
-                            className={`absolute left-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all duration-200 transform ${
+                            className={`absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-all duration-200 transform ${
                                 isHovering ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'
                             }`}
                             aria-label="Imagen anterior"
@@ -118,7 +119,7 @@ export default function ProductoCard({ producto, categoriaNombre, onEdit, onDele
                                 e.stopPropagation();
                                 handleNextImage();
                             }}
-                            className={`absolute right-2 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all duration-200 transform ${
+                            className={`absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-all duration-200 transform ${
                                 isHovering ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'
                             }`}
                             aria-label="Siguiente imagen"
@@ -128,7 +129,7 @@ export default function ProductoCard({ producto, categoriaNombre, onEdit, onDele
                         </button>
                         
                         {/* Image Counter */}
-                        <div className="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+                        <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
                             {currentImageIndex + 1} / {images.length}
                         </div>
                     </>
@@ -148,8 +149,8 @@ export default function ProductoCard({ producto, categoriaNombre, onEdit, onDele
                 )}
 
                 {categoriaNombre && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                        📁 {categoriaNombre}
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
+                        <Folder className="w-3 h-3" strokeWidth={1.5} /> {categoriaNombre}
                     </span>
                 )}
 

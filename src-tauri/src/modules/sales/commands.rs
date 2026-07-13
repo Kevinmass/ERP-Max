@@ -1,6 +1,6 @@
 use sqlx::SqlitePool;
 use tauri::State;
-use crate::modules::sales::models::{CrearVenta, VentaResponse};
+use crate::modules::sales::models::{CrearVenta, VentaResponse, SalesHistoryResponse};
 use crate::modules::sales::service;
 use crate::modules::sales::db;
 
@@ -63,4 +63,17 @@ pub async fn get_sales_history_with_filter(
     only_active: bool,
 ) -> Result<Vec<VentaResponse>, String> {
     db::get_sales_history_with_filter(&pool, limit, offset, only_active).await
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub async fn get_sales_history_page(
+    pool: State<'_, SqlitePool>,
+    limit: i32,
+    offset: i32,
+    viewMode: String,
+    dateFrom: Option<String>,
+) -> Result<SalesHistoryResponse, String> {
+    let (data, total) = db::get_sales_history_paginated(&pool, limit, offset, &viewMode, dateFrom).await?;
+    Ok(SalesHistoryResponse { data, total })
 }

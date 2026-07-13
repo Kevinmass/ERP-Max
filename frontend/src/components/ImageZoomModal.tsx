@@ -80,7 +80,7 @@ export default function ImageZoomModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
             <div 
                 ref={modalRef}
                 className="relative w-full h-full max-w-6xl max-h-[90vh] flex items-center justify-center"
@@ -91,7 +91,7 @@ export default function ImageZoomModal({
                     ref={closeButtonRef}
                     onClick={onClose}
                     aria-label="Cerrar vista ampliada"
-                    className="absolute top-4 right-4 z-10 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all focus:outline-none focus:ring-2 focus:ring-white"
+                    className="absolute top-4 right-4 z-10 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-white"
                 >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -109,7 +109,7 @@ export default function ImageZoomModal({
                                 handlePrevImage();
                             }}
                             aria-label="Imagen anterior"
-                            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-70 transition-all focus:outline-none focus:ring-2 focus:ring-white cursor-pointer z-20"
+                            className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-3 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-white cursor-pointer z-20"
                             style={{ pointerEvents: 'auto' }}
                         >
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -125,7 +125,7 @@ export default function ImageZoomModal({
                                 handleNextImage();
                             }}
                             aria-label="Siguiente imagen"
-                            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-70 transition-all focus:outline-none focus:ring-2 focus:ring-white cursor-pointer z-20"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-3 rounded-full hover:bg-black/70 transition-all focus:outline-none focus:ring-2 focus:ring-white cursor-pointer z-20"
                             style={{ pointerEvents: 'auto' }}
                         >
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,13 +152,13 @@ export default function ImageZoomModal({
 
                 {/* Image Counter */}
                 {images.length > 1 && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded-full text-sm">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded-full text-sm">
                         {currentIndex + 1} / {images.length}
                     </div>
                 )}
 
                 {/* Product Name */}
-                <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 text-white px-4 py-2 rounded-lg text-sm max-w-xs truncate">
+                <div className="absolute bottom-4 right-4 bg-black/50 text-white px-4 py-2 rounded-lg text-sm max-w-xs truncate">
                     {productName}
                 </div>
             </div>

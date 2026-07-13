@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
 use tauri::State;
 use crate::modules::dashboard::db;
-use crate::modules::dashboard::{DashboardResponse, KpiConfig, DashboardStats, SalesTrend, InventoryStatus};
+use crate::modules::dashboard::{DashboardResponse, KpiConfig, DashboardStats, SalesTrend, InventoryStatus, TopProduct, CategoryRevenue};
 
 #[tauri::command]
 pub async fn get_dashboard_data(
@@ -30,6 +30,21 @@ pub async fn get_inventory_status(
     pool: State<'_, SqlitePool>,
 ) -> Result<Vec<InventoryStatus>, String> {
     db::get_inventory_status(&pool).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_top_selling_products(
+    pool: State<'_, SqlitePool>,
+    limit: i32,
+) -> Result<Vec<TopProduct>, String> {
+    db::get_top_selling_products(&pool, limit).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_revenue_by_category(
+    pool: State<'_, SqlitePool>,
+) -> Result<Vec<CategoryRevenue>, String> {
+    db::get_revenue_by_category(&pool).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

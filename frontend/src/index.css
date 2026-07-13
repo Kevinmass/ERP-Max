@@ -1,57 +1,51 @@
 @import "tailwindcss";
 
-/* TAILWIND V4 CONFIGURATION 
-   We define the "brand" colors here so Tailwind can generate 
-   classes like 'ring-brand-500' and 'bg-brand-500'.
-*/
+/* ============================================================
+   «TALLER» design tokens (Phase 4)
+   Steel neutrals + safety-amber accent. Numeric-first, 4px corners.
+   The app is written in hardcoded Tailwind utilities; we repaint it by
+   (a) defining Taller values here and in theme.ts, and
+   (b) remapping the utility classes below to those CSS variables.
+   ============================================================ */
+
+/* Tailwind @theme defaults = first paint (before theme.ts runs) + any
+   Tailwind-generated classes (e.g. ring-brand-500). Amber accent baked in. */
 @theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #60a5fa;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
-  --color-brand-900: #1e3a8a;
-  --color-brand-950: #172554;
-  
-  /* We also map your custom surface/neutral colors here if you want Tailwind to know them
-     (Optional, but helps avoids !important overrides later) */
-  --color-surface-50: #f9fafb;
-  --color-surface-100: #f3f4f6;
-  --color-surface-200: #e5e7eb;
-  --color-surface-300: #d1d5db;
-  
-  --color-neutral-300: #d1d5db;
-  --color-neutral-400: #9ca3af;
-  --color-neutral-500: #6b7280;
-  --color-neutral-600: #4b5563;
-  --color-neutral-700: #374151;
-  --color-neutral-800: #1f2937;
-  --color-neutral-900: #111827;
-  --color-neutral-950: #030712;
+  --color-brand-50: #FBF3E7;
+  --color-brand-100: #F6E6CC;
+  --color-brand-200: #ECCB99;
+  --color-brand-300: #E0AC63;
+  --color-brand-400: #D18B2E;
+  --color-brand-500: #C25E00;
+  --color-brand-600: #A85200;
+  --color-brand-700: #8A4400;
+  --color-brand-800: #6B3500;
+  --color-brand-900: #4A2500;
+  --color-brand-950: #2E1700;
+
+  --color-surface-50: #FFFFFF;
+  --color-surface-100: #F2F3F5;
+  --color-surface-200: #E8EAEE;
+  --color-surface-300: #D9DCE1;
+
+  --color-neutral-300: #C7CCD3;
+  --color-neutral-400: #9BA2AC;
+  --color-neutral-500: #5E6570;
+  --color-neutral-600: #4A515B;
+  --color-neutral-700: #363B43;
+  --color-neutral-800: #22262B;
+  --color-neutral-900: #16181B;
+  --color-neutral-950: #0C0D0F;
+
+  /* Fonts (bundled locally via @fontsource, imported in main.tsx) */
+  --font-sans: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
 }
 
-/* CSS Custom Properties for Design System */
 :root {
-  /* LINKING TAILWIND COLORS TO YOUR VARIABLES
-     This ensures your existing code using var(--color-brand-500) works 
-  */
-  --color-brand-500: var(--color-brand-500); 
-  --color-brand-600: var(--color-brand-600);
-  /* (I added the color definitions in the @theme block above, 
-     but your overrides below rely on these var() names existing) */
-
-  /* Font Size Scale Multipliers (will be updated by JavaScript) */
-  --font-scale-xs: 1;
-  --font-scale-sm: 1;
+  /* Font Size Scale (updated by applyFontSize) */
   --font-scale-base: 1;
-  --font-scale-lg: 1;
-  --font-scale-xl: 1;
 
-  /* Base Font Sizes (will be scaled by user preference) */
   --font-size-xs: calc(0.75rem * var(--font-scale-base));
   --font-size-sm: calc(0.875rem * var(--font-scale-base));
   --font-size-base: calc(1rem * var(--font-scale-base));
@@ -59,45 +53,32 @@
   --font-size-xl: calc(1.25rem * var(--font-scale-base));
   --font-size-2xl: calc(1.5rem * var(--font-scale-base));
   --font-size-3xl: calc(1.875rem * var(--font-scale-base));
-  --font-size-4xl: calc(2.25rem * var(--font-scale-base));
 
   /* Typography */
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
-  --letter-spacing-tight: -0.025em;
-  --letter-spacing-normal: 0;
-  --letter-spacing-wide: 0.025em;
 
-  /* Spacing Scale */
+  /* Spacing (4px grid) */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
-  --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
-  --space-10: 2.5rem;
   --space-12: 3rem;
-  --space-16: 4rem;
-  --space-20: 5rem;
-  --space-24: 6rem;
 
-  /* Border Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
+  /* Radius — Taller is 4px everywhere; badges 3px; pills only for toggles */
+  --radius-badge: 3px;
+  --radius: 4px;
+  --radius-panel: 4px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  /* Shadows — borders over shadows; one soft tier for genuinely floating UI */
+  --shadow-sm: 0 1px 2px 0 rgba(16, 18, 20, 0.06);
+  --shadow-md: 0 4px 10px -2px rgba(16, 18, 20, 0.12);
+  --shadow-lg: 0 12px 28px -6px rgba(16, 18, 20, 0.18);
 
-  /* Z-Index Scale */
+  /* Z-Index */
   --z-dropdown: 1000;
   --z-sticky: 1010;
   --z-fixed: 1020;
@@ -106,13 +87,24 @@
   --z-popover: 1050;
   --z-tooltip: 1060;
 
-  /* Transitions */
-  --transition-fast: 150ms ease-in-out;
-  --transition-normal: 250ms ease-in-out;
-  --transition-slow: 350ms ease-in-out;
+  /* Motion tokens (Linear register; asymmetric enter/exit) — for later increments */
+  --motion-instant: 0ms;
+  --motion-fast: 90ms;
+  --motion-base: 160ms;
+  --motion-exit: 120ms;
+  --motion-panel: 220ms;
+  --motion-expressive: 400ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
+
+  /* Legacy transition aliases still referenced by components */
+  --transition-fast: var(--motion-fast) var(--ease-out);
+  --transition-normal: var(--motion-base) var(--ease-out);
+  --transition-slow: var(--motion-panel) var(--ease-out);
 }
 
-/* Override Tailwind font size classes to use our scaling system */
+/* Font-size scaling overrides */
 .text-xs { font-size: calc(0.75rem * var(--font-scale-base)) !important; }
 .text-sm { font-size: calc(0.875rem * var(--font-scale-base)) !important; }
 .text-base { font-size: calc(1rem * var(--font-scale-base)) !important; }
@@ -124,97 +116,48 @@
 .text-5xl { font-size: calc(3rem * var(--font-scale-base)) !important; }
 .text-6xl { font-size: calc(3.75rem * var(--font-scale-base)) !important; }
 
-/* POS Interface specific styles for font scaling */
-.pos-container {
-    transition: padding-right 0.3s ease-in-out;
-}
+/* ============================================================
+   Corners — Taller is square-ish. Collapse Tailwind's rounded scale to 4px.
+   (rounded-full is preserved for toggles, avatars, status dots.)
+   ============================================================ */
+.rounded { border-radius: var(--radius) !important; }
+.rounded-md { border-radius: var(--radius) !important; }
+.rounded-lg { border-radius: var(--radius) !important; }
+.rounded-xl { border-radius: var(--radius) !important; }
+.rounded-2xl { border-radius: var(--radius) !important; }
+.rounded-3xl { border-radius: var(--radius) !important; }
+.rounded-sm { border-radius: var(--radius-badge) !important; }
 
-.pos-product-grid {
-    transition: padding-right 0.3s ease-in-out;
-}
+/* POS layout helpers (unchanged behavior) */
+.pos-container,
+.pos-product-grid { transition: padding-right var(--transition-slow); }
+.pos-sidebar-visible { padding-right: calc(24rem * var(--font-scale-base)); }
+@media (min-width: 1280px) { .pos-sidebar-visible { padding-right: calc(28rem * var(--font-scale-base)); } }
 
-/* Ensure proper spacing when sidebar is visible */
-.pos-sidebar-visible {
-    padding-right: calc(24rem * var(--font-scale-base));
-}
+.floating-checkout { z-index: 50; transition: all var(--transition-slow); }
+.floating-checkout button { will-change: transform; box-shadow: var(--shadow-lg); }
 
-/* Responsive adjustments for different screen sizes */
-@media (min-width: 1024px) {
-    .pos-sidebar-visible {
-        padding-right: calc(24rem * var(--font-scale-base));
-    }
-}
-
-@media (min-width: 1280px) {
-    .pos-sidebar-visible {
-        padding-right: calc(28rem * var(--font-scale-base));
-    }
-}
-
-/* Floating checkout button positioning */
-.floating-checkout {
-    z-index: 50;
-    transition: all 0.3s ease-in-out;
-}
-
-/* Ensure checkout button is always accessible */
-.floating-checkout button {
-    will-change: transform;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* Cart sidebar improvements for font scaling */
 .cart-sidebar {
-    width: calc(24rem * var(--font-scale-base));
-    transition: transform 0.3s ease-in-out, width 0.3s ease-in-out;
+  width: calc(24rem * var(--font-scale-base));
+  transition: transform var(--transition-slow), width var(--transition-slow);
 }
+.cart-sidebar.collapsed { transform: translateX(100%); }
 
-.cart-sidebar.collapsed {
-    transform: translateX(100%);
-}
+.product-card { transition: transform var(--transition-normal), border-color var(--motion-instant); transform-origin: center; }
+.product-card:hover { transform: translateY(-2px); }
 
-/* Product card responsive behavior */
-.product-card {
-    transition: all 0.3s ease-in-out;
-    transform-origin: center;
-}
+.product-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+@media (min-width: 768px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .product-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1280px) { .product-grid { grid-template-columns: repeat(4, 1fr); } }
 
-.product-card:hover {
-    transform: translateY(-4px) scale(1.02);
-}
+.pos-main-content { overflow-x: hidden; min-height: 100vh; }
 
-/* Grid responsive behavior with font scaling */
-.product-grid {
-    display: grid;
-    gap: 1.5rem;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-}
+/* ============================================================
+   Utility-class → Taller variable remaps
+   ============================================================ */
 
-@media (min-width: 768px) {
-    .product-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (min-width: 1024px) {
-    .product-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-@media (min-width: 1280px) {
-    .product-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
-
-/* Ensure proper overflow handling */
-.pos-main-content {
-    overflow-x: hidden;
-    min-height: 100vh;
-}
-
-/* Override Tailwind color classes to use theme variables */
+/* Surface / neutral backgrounds */
 .bg-white { background-color: var(--color-surface-50) !important; }
 .bg-gray-50 { background-color: var(--color-surface-100) !important; }
 .bg-gray-100 { background-color: var(--color-surface-200) !important; }
@@ -227,26 +170,19 @@
 .bg-gray-800 { background-color: var(--color-neutral-800) !important; }
 .bg-gray-900 { background-color: var(--color-neutral-900) !important; }
 
-/* Card and component backgrounds */
-.bg-white { background-color: var(--color-surface-50) !important; }
 .bg-slate-50 { background-color: var(--color-surface-100) !important; }
 .bg-slate-100 { background-color: var(--color-surface-200) !important; }
 .bg-slate-200 { background-color: var(--color-surface-300) !important; }
 
-/* Modal and overlay backgrounds */
+/* Overlays */
 .bg-black { background-color: var(--color-neutral-950) !important; }
 .bg-black\/50 { background-color: rgba(0, 0, 0, 0.5) !important; }
 
-/* Header and navigation specific overrides */
+/* Header/nav surfaces */
 header.bg-white { background-color: var(--color-surface-50) !important; }
 nav.bg-white { background-color: var(--color-surface-50) !important; }
-.border-gray-200 { border-color: var(--color-surface-300) !important; }
-.border-gray-100 { border-color: var(--color-surface-200) !important; }
 
-/* Header logo button */
-.bg-blue-500 { background-color: var(--color-brand-500) !important; }
-.bg-blue-600 { background-color: var(--color-brand-600) !important; }
-
+/* Text — neutral ramp */
 .text-gray-50 { color: var(--color-surface-100) !important; }
 .text-gray-100 { color: var(--color-surface-200) !important; }
 .text-gray-200 { color: var(--color-surface-300) !important; }
@@ -257,11 +193,10 @@ nav.bg-white { background-color: var(--color-surface-50) !important; }
 .text-gray-700 { color: var(--color-neutral-700) !important; }
 .text-gray-800 { color: var(--color-neutral-800) !important; }
 .text-gray-900 { color: var(--color-neutral-900) !important; }
-
 .text-white { color: var(--color-surface-50) !important; }
 .text-black { color: var(--color-neutral-950) !important; }
 
-/* Brand color overrides */
+/* Brand (amber) backgrounds */
 .bg-blue-50 { background-color: var(--color-brand-50) !important; }
 .bg-blue-100 { background-color: var(--color-brand-100) !important; }
 .bg-blue-200 { background-color: var(--color-brand-200) !important; }
@@ -273,6 +208,7 @@ nav.bg-white { background-color: var(--color-surface-50) !important; }
 .bg-blue-800 { background-color: var(--color-brand-800) !important; }
 .bg-blue-900 { background-color: var(--color-brand-900) !important; }
 
+/* Brand (amber) text */
 .text-blue-50 { color: var(--color-brand-50) !important; }
 .text-blue-100 { color: var(--color-brand-100) !important; }
 .text-blue-200 { color: var(--color-brand-200) !important; }
@@ -284,19 +220,31 @@ nav.bg-white { background-color: var(--color-surface-50) !important; }
 .text-blue-800 { color: var(--color-brand-800) !important; }
 .text-blue-900 { color: var(--color-brand-900) !important; }
 
-/* Border color overrides */
+/* Borders */
+.border-gray-100 { border-color: var(--color-surface-200) !important; }
 .border-gray-200 { border-color: var(--color-surface-300) !important; }
 .border-gray-300 { border-color: var(--color-neutral-300) !important; }
 .border-gray-400 { border-color: var(--color-neutral-400) !important; }
 .border-gray-600 { border-color: var(--color-neutral-600) !important; }
+.border-blue-100 { border-color: var(--color-brand-100) !important; }
+.border-blue-200 { border-color: var(--color-brand-200) !important; }
+.border-blue-300 { border-color: var(--color-brand-300) !important; }
+.border-blue-500 { border-color: var(--color-brand-500) !important; }
+.border-blue-600 { border-color: var(--color-brand-600) !important; }
+.border-blue-700 { border-color: var(--color-brand-700) !important; }
 
-/* Global Styles */
-* {
-  box-sizing: border-box;
-}
+/* Focus rings — the current markup uses ring-blue-*; make them amber */
+.ring-blue-300 { --tw-ring-color: var(--color-brand-300) !important; }
+.ring-blue-500 { --tw-ring-color: var(--color-brand-500) !important; }
+.ring-blue-600 { --tw-ring-color: var(--color-brand-600) !important; }
+
+/* ============================================================
+   Global styles
+   ============================================================ */
+* { box-sizing: border-box; }
 
 html {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -305,192 +253,79 @@ html {
 body {
   margin: 0;
   padding: 0;
-  color: rgb(31 41 55); /* neutral-800 */
+  color: var(--text, #16181B);
+  background-color: var(--app-bg, #F2F3F5);
+  /* Ledger motif: numbers align in columns */
+  font-variant-numeric: tabular-nums;
   transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
-/* Dark mode overrides */
-.dark body {
-  color: rgb(243 244 246); /* surface-100 */
+/* Signage register for semantic headings (Archivo, slightly expanded) */
+h1, h2, h3 {
+  font-variation-settings: 'wght' 600, 'wdth' 112;
+  letter-spacing: -0.005em;
 }
 
-/* Focus styles */
+.font-mono { font-family: var(--font-mono) !important; }
+
+/* Focus helper */
 .focus-ring {
-  /* THIS IS THE LINE THAT WAS FAILING. 
-     Now it works because "brand-500" is defined in @theme above */
   @apply focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Button press state (§4): physical, instant — 0.5px down + darken 4%. */
+button:not(:disabled):active {
+  transform: translateY(0.5px);
+  filter: brightness(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):active { transform: none; }
 }
 
-::-webkit-scrollbar-track {
-  background: rgb(243 244 246); /* surface-100 */
+/* Density: Compacto — tightens table row padding (long product tables). */
+.density-compact table td,
+.density-compact table th {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgb(156 163 175); /* neutral-400 */
-  border-radius: var(--radius-md);
+/* Scrollbars — steel */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--app-bg); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-neutral-500); }
+
+/* Utility animations (kept; retimed to Taller motion register) */
+.animate-fade-in { animation: fadeIn var(--motion-panel) var(--ease-out); }
+.animate-slide-in { animation: slideIn var(--motion-base) var(--ease-out); }
+.animate-scale-in { animation: scaleIn var(--motion-base) var(--ease-out); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Sale-completed receipt moment (§5) — the one expressive, celebratory beat. */
+.animate-receipt-in { animation: receiptIn var(--motion-expressive) var(--ease-spring); }
+@keyframes receiptIn {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(107 114 128); /* neutral-500 */
+/* «Hoy» entrance — quick staggered rise on the landing bands (productive register). */
+.stagger-rise > * { opacity: 0; animation: riseIn var(--motion-panel) var(--ease-out) forwards; }
+.stagger-rise > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-rise > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-rise > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-rise > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-rise > *:nth-child(5) { animation-delay: 200ms; }
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Dark mode scrollbars */
-.dark ::-webkit-scrollbar-track {
-  background: rgb(31 41 55); /* neutral-800 */
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: rgb(75 85 99); /* neutral-600 */
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgb(107 114 128); /* neutral-500 */
-}
-
-/* Utility classes */
-.animate-fade-in {
-  animation: fadeIn 0.5s ease-in-out;
-}
-
-.animate-slide-in {
-  animation: slideIn 0.3s ease-out;
-}
-
-.animate-scale-in {
-  animation: scaleIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 80ms !important;
   }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* Theme Background Patterns */
-.theme-blue-light body {
-  background: linear-gradient(135deg, #eff6ff, #ffffff);
-}
-
-.theme-blue-dark body {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
-}
-
-.theme-green-light body {
-  background: linear-gradient(135deg, #f0fdf4, #ffffff);
-}
-
-.theme-green-dark body {
-  background: linear-gradient(135deg, #052e16, #14532d);
-}
-
-.theme-purple-light body {
-  background: linear-gradient(135deg, #faf5ff, #ffffff);
-}
-
-.theme-purple-dark body {
-  background: linear-gradient(135deg, #3b0764, #581c87);
-}
-
-.theme-professional-light body {
-  background: linear-gradient(135deg, #f9fafb, #ffffff);
-}
-
-.theme-professional-dark body {
-  background: linear-gradient(135deg, #111827, #1f2937);
-}
-
-/* Background Patterns */
-.theme-blue-light body::before,
-.theme-blue-dark body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: -1;
-  background-image:
-    linear-gradient(45deg, rgba(59, 130, 246, 0.08) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(59, 130, 246, 0.08) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(59, 130, 246, 0.08) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(59, 130, 246, 0.08) 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-}
-
-.theme-green-light body::before,
-.theme-green-dark body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: -1;
-  background-image:
-    linear-gradient(45deg, rgba(22, 163, 74, 0.08) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(22, 163, 74, 0.08) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(22, 163, 74, 0.08) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(22, 163, 74, 0.08) 75%);
-  background-size: 15px 15px;
-}
-
-.theme-purple-light body::before,
-.theme-purple-dark body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: -1;
-  background-image: radial-gradient(circle at 25% 25%, rgba(168, 85, 247, 0.08) 2px, transparent 2px),
-                    radial-gradient(circle at 75% 75%, rgba(168, 85, 247, 0.08) 2px, transparent 2px);
-  background-size: 20px 20px;
-}
-
-.theme-professional-light body::before,
-.theme-professional-dark body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: -1;
-  background-image:
-    radial-gradient(circle at 50% 100%, rgba(107, 114, 128, 0.06) 2px, transparent 2px),
-    radial-gradient(circle at 50% 0%, rgba(107, 114, 128, 0.06) 2px, transparent 2px);
-  background-size: 25px 25px;
 }

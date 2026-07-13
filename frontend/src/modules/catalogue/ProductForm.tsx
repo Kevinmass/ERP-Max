@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ImagePlus, X } from 'lucide-react';
 import type { Producto, Categoria, CrearProducto, ActualizarProducto } from './types';
+import { sortCategoriesHierarchically, getCategoryBreadcrumb } from './categoryTree';
 
 interface ProductFormProps {
     isOpen: boolean;
@@ -30,6 +32,9 @@ export default function ProductForm({
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const addImagesInputRef = useRef<HTMLInputElement>(null);
+    const replaceImageInputRef = useRef<HTMLInputElement>(null);
+    const [replacingIndex, setReplacingIndex] = useState<number | null>(null);
 
     // Reset form when modal opens/closes or editing product changes
     useEffect(() => {
@@ -114,7 +119,7 @@ export default function ProductForm({
         const files = e.target.files;
         if (!files) return;
 
-        // Convert files to base64
+        // Convert files to base64 and append — never touches existing photos
         Array.from(files).forEach(file => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -128,6 +133,8 @@ export default function ProductForm({
             };
             reader.readAsDataURL(file);
         });
+
+        e.target.value = '';
     };
 
     const removeImage = (index: number) => {
@@ -137,15 +144,53 @@ export default function ProductForm({
         }));
     };
 
+    // Clicking a thumbnail opens the picker for just that slot; only that
+    // image is swapped out, the rest of the gallery is untouched.
+    const startReplaceImage = (index: number) => {
+        setReplacingIndex(index);
+        replaceImageInputRef.current?.click();
+    };
+
+    const handleReplaceImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const index = replacingIndex;
+        if (!file || index === null) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const result = ev.target?.result as string;
+            if (result) {
+                setFormData(prev => ({
+                    ...prev,
+                    fotos: prev.fotos.map((foto, i) => i === index ? result : foto)
+                }));
+            }
+        };
+        reader.readAsDataURL(file);
+
+        e.target.value = '';
+        setReplacingIndex(null);
+    };
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                        {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
-                    </h2>
+                    <div className="flex items-start justify-between mb-4">
+                        <h2 className="text-xl font-semibold text-gray-900">
+                            {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                            aria-label="Cerrar"
+                        >
+                            <X className="w-5 h-5" strokeWidth={1.5} />
+                        </button>
+                    </div>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Nombre */}
@@ -271,9 +316,9 @@ export default function ProductForm({
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">Sin categoría</option>
-                                {categorias.map(cat => (
+                                {sortCategoriesHierarchically(categorias).map(cat => (
                                     <option key={cat.id} value={cat.id}>
-                                        {cat.nombre}
+                                        {getCategoryBreadcrumb(cat, categorias)}
                                     </option>
                                 ))}
                             </select>
@@ -301,27 +346,57 @@ export default function ProductForm({
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Imágenes
                             </label>
+
+                            {/* Hidden inputs: one for adding (multiple), one for replacing a single slot */}
                             <input
+                                ref={addImagesInputRef}
                                 type="file"
                                 accept="image/*"
                                 multiple
                                 onChange={handleImageUpload}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="hidden"
                             />
+                            <input
+                                ref={replaceImageInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleReplaceImage}
+                                className="hidden"
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() => addImagesInputRef.current?.click()}
+                                className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <ImagePlus className="w-4 h-4" strokeWidth={1.5} /> Agregar imágenes
+                            </button>
                             <p className="text-sm text-gray-500 mt-1">
-                                Seleccione una o más imágenes
+                                Se suman a las que ya tenga el producto. Haga clic sobre una imagen para reemplazarla.
                             </p>
 
                             {/* Preview images */}
                             {formData.fotos.length > 0 && (
                                 <div className="mt-2 grid grid-cols-4 gap-2">
                                     {formData.fotos.map((foto, index) => (
-                                        <div key={index} className="relative">
-                                            <img
-                                                src={foto}
-                                                alt={`Preview ${index + 1}`}
-                                                className="w-full h-20 object-cover rounded border"
-                                            />
+                                        <div key={index} className="relative group">
+                                            <button
+                                                type="button"
+                                                onClick={() => startReplaceImage(index)}
+                                                className="block w-full"
+                                                title="Reemplazar esta imagen"
+                                            >
+                                                <img
+                                                    src={foto}
+                                                    alt={`Preview ${index + 1}`}
+                                                    className="w-full h-20 object-cover rounded border"
+                                                />
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 rounded transition-colors flex items-center justify-center">
+                                                    <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        Reemplazar
+                                                    </span>
+                                                </div>
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={() => removeImage(index)}

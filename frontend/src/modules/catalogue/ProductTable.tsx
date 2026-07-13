@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { Folder } from 'lucide-react';
 import type { Producto, Categoria } from './types';
 import PriceAdjustModal from './PriceAdjustModal';
 
@@ -21,8 +22,6 @@ export default function ProductTable({
     onRefresh,
     onBulkAdjust
 }: ProductTableProps) {
-    const [search, setSearch] = useState('');
-    const [inputValue, setInputValue] = useState('');
     const [sortBy, setSortBy] = useState<'none' | 'stock' | 'price'>('none');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -34,17 +33,6 @@ export default function ProductTable({
     useEffect(() => {
         setSelectedIds(new Set());
     }, [productos]);
-
-    const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const debouncedSetSearch = useCallback((value: string) => {
-        if (debounceTimeoutRef.current) {
-            clearTimeout(debounceTimeoutRef.current);
-        }
-        debounceTimeoutRef.current = setTimeout(() => {
-            setSearch(value);
-        }, 300);
-    }, []);
 
     // Build category map for quick lookup
     const categoryMap = useMemo(() => {
@@ -76,43 +64,16 @@ export default function ProductTable({
         return path;
     };
 
-    // Filter and sort products
+    // Sort products (filtering already happened upstream via the page search bar)
     const filteredAndSortedProductos = useMemo(() => {
-        let filtered = productos;
+        if (sortBy === 'none') return productos;
 
-        // Apply search filter
-        if (search.trim()) {
-            const searchWords = search.toLowerCase().split(/\s+/).filter(Boolean);
-            filtered = productos.filter(producto => {
-                const text = `${producto.nombre} ${producto.descripcion || ''} ${producto.tags || ''}`.toLowerCase();
-                return searchWords.every(word => text.includes(word));
-            });
-        }
-
-        // Apply sorting
-        if (sortBy !== 'none') {
-            filtered = [...filtered].sort((a, b) => {
-                let aValue: number;
-                let bValue: number;
-
-                if (sortBy === 'stock') {
-                    aValue = a.stock;
-                    bValue = b.stock;
-                } else { // price
-                    aValue = a.costo;
-                    bValue = b.costo;
-                }
-
-                if (sortOrder === 'asc') {
-                    return aValue - bValue;
-                } else {
-                    return bValue - aValue;
-                }
-            });
-        }
-
-        return filtered;
-    }, [productos, search, sortBy, sortOrder]);
+        return [...productos].sort((a, b) => {
+            const aValue = sortBy === 'stock' ? a.stock : a.costo;
+            const bValue = sortBy === 'stock' ? b.stock : b.costo;
+            return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+        });
+    }, [productos, sortBy, sortOrder]);
 
     // Selection helpers (selection persists across filtering/sorting)
     const selectedProducts = useMemo(
@@ -171,22 +132,9 @@ export default function ProductTable({
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            {/* Header with search and controls */}
+            {/* Header with sort/refresh controls */}
             <div className="p-4 border-b border-gray-200">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                    <div className="flex-1 max-w-md">
-                        <input
-                            type="text"
-                            placeholder="Buscar productos..."
-                            value={inputValue}
-                            onChange={(e) => {
-                                setInputValue(e.target.value);
-                                debouncedSetSearch(e.target.value);
-                            }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                    </div>
-
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-end">
                     <div className="flex items-center gap-4">
                         <select
                             value={sortBy}
@@ -254,25 +202,22 @@ export default function ProductTable({
                                     aria-label="Seleccionar todos"
                                 />
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Producto
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Categoría
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Stock
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Precio
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Etiquetas
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                ID
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Acciones
                             </th>
                         </tr>
@@ -282,7 +227,7 @@ export default function ProductTable({
                             const categoryDisplay = getCategoryDisplay(producto);
 
                             return (
-                                <tr key={producto.id} className={`transition-colors ${selectedIds.has(producto.id) ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                                <tr key={producto.id} className={`group transition-colors ${selectedIds.has(producto.id) ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
                                     <td className="px-4 py-4 w-10">
                                         <input
                                             type="checkbox"
@@ -292,24 +237,25 @@ export default function ProductTable({
                                             aria-label={`Seleccionar ${producto.nombre}`}
                                         />
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-3 max-w-xs">
                                         <div>
                                             <div className="text-sm font-medium text-gray-900">
                                                 {producto.nombre}
+                                                <span className="ml-1.5 text-xs text-gray-400 font-normal">#{producto.id}</span>
                                             </div>
                                             {producto.descripcion && (
-                                                <div className="text-sm text-gray-500">
+                                                <div className="text-sm text-gray-500 line-clamp-1">
                                                     {producto.descripcion}
                                                 </div>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                            📁 {categoryDisplay}
+                                    <td className="px-4 py-3">
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <Folder className="w-3 h-3 shrink-0" strokeWidth={1.5} /> {categoryDisplay}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-3 whitespace-nowrap">
                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                             producto.stock > 10
                                                 ? 'bg-green-100 text-green-800'
@@ -320,7 +266,7 @@ export default function ProductTable({
                                             {producto.stock}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-3 whitespace-nowrap">
                                         <div className="text-sm font-medium text-green-600">
                                             $ {producto.costo.toFixed(2)}
                                         </div>
@@ -337,7 +283,7 @@ export default function ProductTable({
                                             );
                                         })()}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-4 py-3 max-w-[12rem]">
                                         {producto.tags && producto.tags.split(' ').filter(t => t.trim()).length > 0 ? (
                                             <div className="flex flex-wrap gap-1">
                                                 {producto.tags.split(' ').map((tag) => {
@@ -354,11 +300,8 @@ export default function ProductTable({
                                             <span className="text-xs text-gray-400">Sin etiquetas</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {producto.id}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <div className="flex items-center gap-2">
+                                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => onEdit(producto)}
                                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
@@ -379,12 +322,6 @@ export default function ProductTable({
                     </tbody>
                 </table>
             </div>
-
-            {filteredAndSortedProductos.length === 0 && productos.length > 0 && (
-                <div className="text-center py-20 text-gray-500 bg-white rounded-b-lg min-h-[300px] flex items-center justify-center">
-                    No se encontraron productos que coincidan con "{search}"
-                </div>
-            )}
 
             {productos.length === 0 && (
                 <div className="text-center py-20 text-gray-500 bg-white rounded-b-lg min-h-[300px] flex items-center justify-center">

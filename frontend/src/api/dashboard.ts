@@ -8,6 +8,8 @@ export interface DashboardStats {
   active_categories: number;
   total_revenue: number;
   sales_count: number;
+  today_sales_count: number;
+  today_items_sold: number;
 }
 
 export interface SalesTrend {
@@ -19,6 +21,18 @@ export interface SalesTrend {
 export interface InventoryStatus {
   status: string;
   count: number;
+}
+
+export interface TopProduct {
+  producto_id: number;
+  nombre: string;
+  cantidad_vendida: number;
+  ingresos: number;
+}
+
+export interface CategoryRevenue {
+  categoria: string;
+  ingresos: number;
 }
 
 export interface KpiConfig {
@@ -52,6 +66,14 @@ export const getSalesTrend = async (days: number): Promise<SalesTrend[]> => {
 
 export const getInventoryStatus = async (): Promise<InventoryStatus[]> => {
   return await invoke<InventoryStatus[]>('get_inventory_status');
+};
+
+export const getTopSellingProducts = async (limit: number): Promise<TopProduct[]> => {
+  return await invoke<TopProduct[]>('get_top_selling_products', { limit });
+};
+
+export const getRevenueByCategory = async (): Promise<CategoryRevenue[]> => {
+  return await invoke<CategoryRevenue[]>('get_revenue_by_category');
 };
 
 export const getKpiConfig = async (): Promise<KpiConfig> => {

@@ -6,10 +6,9 @@ export interface Settings {
     business_phone?: string;
     business_email?: string;
     business_website?: string;
-    theme_name: 'blue' | 'green' | 'purple' | 'professional';
     theme_variant: 'light' | 'dark';
+    density: 'comodo' | 'compacto';
     font_size: 'small' | 'medium' | 'large';
-    language: 'en' | 'es';
     tax_rate: number;
 }
 

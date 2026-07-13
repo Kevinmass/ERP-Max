@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ChevronDown, ChevronRight, FileText, Folder, Plus, Trash2 } from 'lucide-react';
 import type { Categoria, CrearCategoria } from './types';
 
 interface CategoryManagerProps {
@@ -116,16 +117,19 @@ export default function CategoryManager({ categorias, onCreateCategory, onDelete
                         {hasChildren && (
                             <button
                                 onClick={() => toggleCategoryExpansion(category.id)}
-                                className="mr-2 text-gray-500 hover:text-gray-700 transition-colors"
+                                className="mr-2 w-5 h-5 shrink-0 flex items-center justify-center rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                                title={isExpanded ? 'Contraer' : 'Expandir'}
+                                aria-label={isExpanded ? 'Contraer categoría' : 'Expandir categoría'}
                             >
-                                {isExpanded ? '▼' : '▶'}
+                                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" strokeWidth={2} /> : <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />}
                             </button>
                         )}
-                        {!hasChildren && <div className="w-4 mr-2" />}
-                        
+                        {!hasChildren && <div className="w-5 mr-2" />}
+
                         <div className="flex-1">
-                            <span className="text-gray-700 font-medium">
-                                {level > 0 ? '📄 ' : '📁 '}{category.nombre}
+                            <span className="text-gray-700 font-medium inline-flex items-center gap-1.5">
+                                {level > 0 ? <FileText className="w-4 h-4" strokeWidth={1.5} /> : <Folder className="w-4 h-4" strokeWidth={1.5} />}
+                                {category.nombre}
                             </span>
                             {category.descripcion && (
                                 <span className="text-gray-500 text-sm ml-2">- {category.descripcion}</span>
@@ -139,7 +143,7 @@ export default function CategoryManager({ categorias, onCreateCategory, onDelete
                             className="p-1 text-green-600 hover:text-green-800 transition-colors"
                             title="Crear subcategoría"
                         >
-                            ➕
+                            <Plus className="w-4 h-4" strokeWidth={1.5} />
                         </button>
                         {onDeleteCategory && (
                             <button
@@ -147,7 +151,7 @@ export default function CategoryManager({ categorias, onCreateCategory, onDelete
                                 className="p-1 text-red-600 hover:text-red-800 transition-colors"
                                 title="Eliminar categoría"
                             >
-                                🗑️
+                                <Trash2 className="w-4 h-4" strokeWidth={1.5} />
                             </button>
                         )}
                     </div>
@@ -177,7 +181,7 @@ export default function CategoryManager({ categorias, onCreateCategory, onDelete
 
                 {categorias.length === 0 ? (
                     <div className="text-center py-8">
-                        <div className="text-gray-400 text-4xl mb-4">📁</div>
+                        <Folder className="w-10 h-10 mx-auto mb-4 text-gray-400" strokeWidth={1.5} />
                         <p className="text-gray-600">No hay categorías creadas</p>
                         <button
                             onClick={() => startCreating()}

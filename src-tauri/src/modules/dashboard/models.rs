@@ -10,6 +10,9 @@ pub struct DashboardStats {
     pub active_categories: i32,
     pub total_revenue: f64,
     pub sales_count: i32,
+    // Today-only counters for the «Hoy» landing (Phase 4).
+    pub today_sales_count: i32,
+    pub today_items_sold: i32,
 }
 
 // Sales trend data for charts
@@ -45,4 +48,20 @@ pub struct DashboardResponse {
     pub sales_trend: Vec<SalesTrend>,
     pub inventory_status: Vec<InventoryStatus>,
     pub kpi_config: KpiConfig,
+}
+
+// Best-selling products (all-time, by quantity sold) for Análisis
+#[derive(Serialize, Debug, FromRow)]
+pub struct TopProduct {
+    pub producto_id: i32,
+    pub nombre: String,
+    pub cantidad_vendida: i32,
+    pub ingresos: f64,
+}
+
+// Revenue breakdown by category for Análisis
+#[derive(Serialize, Debug, FromRow)]
+pub struct CategoryRevenue {
+    pub categoria: String,
+    pub ingresos: f64,
 }

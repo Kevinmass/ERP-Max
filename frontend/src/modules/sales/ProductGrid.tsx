@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ShoppingBag } from 'lucide-react';
 import type { Producto, Categoria } from '../catalogue/types';
 
 interface ProductGridProps {
@@ -165,7 +166,7 @@ export default function ProductGrid({
                                 />
                                 
                                 {/* Quick Actions Overlay */}
-                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
                                     <button
                                         onClick={() => onAddToCart(producto)}
                                         className="bg-white text-gray-900 px-4 py-2 rounded-lg font-medium shadow-lg hover:bg-gray-100 transition-colors"
@@ -243,7 +244,7 @@ export default function ProductGrid({
             {/* Empty State */}
             {sortedProducts.length === 0 && (
                 <div className="text-center py-12">
-                    <div className="text-6xl mb-4">🛍️</div>
+                    <ShoppingBag className="w-14 h-14 mx-auto mb-4 text-gray-400" strokeWidth={1.5} />
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay productos disponibles</h3>
                     <p className="text-gray-600">No se encontraron productos en el inventario.</p>
                 </div>

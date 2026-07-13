@@ -16,6 +16,8 @@ pub struct InventoryItem {
     pub quantity: i32,
     pub min_stock_level: i32,
     pub is_low_stock: bool,
+    pub categoria_id: Option<i32>,
+    pub thumbnail: Option<String>,
 }
 
 // Response for inventory list
